@@ -1,72 +1,112 @@
 # Configuración de Generación Masiva
 
-# 10 Biomas solicitados
-BIOMES = [
-    "Forest",
-    "Desert",
-    "Snowy Tundra",
-    "Volcanic Wasteland",
-    "Swamp",
-    "Tropical Beach",
-    "Crystal Cave",
-    "Dense Jungle",
-    "Ethereal Floating Islands",
-    "Ancient Ruins"
-]
+# Lista de Biomas
+BIOMES = ["Forest", "Desert", "Snowy Tundra", "Volcanic Wasteland", "Swamp",
+          "Underwater Realm", "Sky Islands", "Crystal Caves", "Mushroom Grove", "Ancient Ruins"]
 
-# Mapeo de assets solicitados
-# Mapeo de assets solicitados (Lista Completa Expandida)
+# Clasificación de métodos de generación
+PROCEDURAL_CATEGORIES = {
+    "Terrain",              # grass, water, dirt tiles
+    "Terrain_Transitions",  # 16 tiles de transición césped-agua
+    "Paths",                # 15 tiles de caminos (horizontal, vertical, curvas, T, cross, ends)
+    "Effects_Simple"        # dirt patches, sombras
+}
+
+AI_CATEGORIES = {
+    "Vegetation",           # Árboles, arbustos, flores
+    "Minerals_Natural",     # Rocas, minerales, ruinas
+    "Structures",           # Casas, pozos, cercas
+    "Props",                # Muebles, cofres, lámparas
+    "Characters",           # Personajes con animación
+    "Character_Accessories",# Overlays de personajes
+    "Social_Markers",       # Símbolos y badges
+    "Animals",              # Fauna
+    "Items",                # Herramientas, comida, consumibles
+    "UI_Icons",             # Iconos de interfaz
+    "Effects_Complex"       # Fogata animada (requiere IA)
+}
+
+# Catálogo de Assets (Según Solicitud Completa)
 ASSETS = {
+    # ===== PROCEDURAL (Rápido, Seamless Garantizado) =====
     "Terrain": [
-        "grass tile", "water tile", "grass to water transition edge", "grass to water transition corner"
+        "grass tile",
+        "water tile",
+        "dirt tile"
+    ],
+    "Terrain_Transitions": [
+        # Bordes (4)
+        "grass_water_edge_N", "grass_water_edge_S", "grass_water_edge_E", "grass_water_edge_W",
+        # Esquinas externas (4)
+        "grass_water_corner_NE", "grass_water_corner_NW", "grass_water_corner_SE", "grass_water_corner_SW",
+        # Esquinas internas (4)
+        "grass_water_inner_NE", "grass_water_inner_NW", "grass_water_inner_SE", "grass_water_inner_SW"
     ],
     "Paths": [
-        "dirt path straight", "dirt path curve", "dirt path crossing", "dirt path intersection",
-        "stone path straight", "stone path curve", "stone path crossing", "stone path intersection"
+        # Rectos (2)
+        "path_horizontal", "path_vertical",
+        # Curvas (4)
+        "path_curve_NE", "path_curve_NW", "path_curve_SE", "path_curve_SW",
+        # T-junctions (4)
+        "path_T_N", "path_T_S", "path_T_E", "path_T_W",
+        # Cruce y terminaciones
+        "path_cross",
+        "path_end_N", "path_end_S", "path_end_E", "path_end_W"
     ],
+    "Effects_Simple": [
+        "dirt_patch",
+        "shadow_circular",
+        "shadow_square"
+    ],
+    
+    # ===== IA (Objetos Complejos) =====
     "Vegetation": [
         "oak tree", "willow tree", "pine tree", "glowing magical tree", "dead tree",
-        "bush", "flowering bush", "mushroom", "cluster of mushrooms", "flower patch", "single flower"
+        "bush", "flowering bush", "mushroom cluster", "flower patch"
     ],
     "Minerals_Natural": [
         "small rock", "large boulder", "mossy rock", "ancient ruin pillar", "broken ruin wall"
     ],
     "Structures": [
-        "small house", "wooden cottage", "stone well", "wooden fence", "stone wall", "castle gate",
+        "small house", "wooden cottage", "stone well", "wooden fence", "stone wall segment", "castle gate",
         "mine entrance", "crafting workbench"
     ],
     "Props": [
         "wooden chair", "wooden bench", "wooden table", "window frame", "street lamp", "lantern post",
-        "wooden barrel", "treasure chest", "wooden crate", "market stall umbrella", "clothesline with clothes", "glass bottle"
+        "wooden barrel", "treasure chest", "wooden crate", "market umbrella", "clothesline", "glass bottle"
     ],
     "Characters": [
-        "male warrior", "female mage", "male villager", "female villager",
-        "male warrior dark skin", "female mage dark skin", "male villager blue clothes", "female villager red clothes"
+        "male warrior", "female mage", "male villager", "female villager"
     ],
     "Character_Accessories": [
-        "golden crown", "headband", "scar overlay", "iron armor chestplate", "hero cape", 
-        "magical aura effect", "fire aura effect"
+        "golden crown", "headband", "scar overlay", "iron armor overlay", "hero cape",
+        "magical aura", "fire aura"
     ],
     "Social_Markers": [
-        "geometric circle symbol", "geometric star symbol", "geometric triangle symbol",
-        "guild badge red", "guild badge blue", "friendship bracelet", "gold necklace"
+        "circle symbol", "star symbol", "triangle symbol",
+        "red badge", "blue badge", "green badge",
+        "bracelet", "necklace"
     ],
     "Animals": [
         "rabbit", "deer", "wild boar", "bird", "fish"
     ],
     "Items": [
+        # Herramientas
         "iron axe", "pickaxe", "fishing rod", "sword", "shield",
+        # Recursos
         "wood log", "stone ore", "gold ore", "iron ore",
+        # Comida
         "bread", "red apple", "cooked meat", "raw fish", "honey jar",
+        # Consumibles
         "health potion", "mana potion", "herb bundle", "water flask"
     ],
     "UI_Icons": [
-        "shield icon (defense)", "bread icon (food)", "book icon (knowledge)", "coin icon (market)", 
-        "cross icon (medic)", "bed icon (rest)", "speech bubble icon (social)", "star icon (spiritual)", 
-        "chest icon (storage)", "sword icon (training)", "drop icon (water)", "hammer icon (work)"
+        "defense icon", "food icon", "knowledge icon", "market icon",
+        "medic icon", "rest icon", "social icon", "spiritual icon",
+        "storage icon", "training icon", "water icon", "work icon"
     ],
-    "Effects": [
-        "dirt patch decal", "shadow blob", "animated campfire"
+    "Effects_Complex": [
+        "animated campfire"  # Animado, necesita IA
     ]
 }
 

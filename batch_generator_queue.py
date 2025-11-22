@@ -16,7 +16,8 @@ import json
 from pixel_engine import PixelArtGenerator
 from image_utils import remove_background, crop_to_content, quantize_colors, add_pixel_outline, create_gif, create_sprite_sheet
 from qa_evaluator import init_advanced_qa, evaluate_advanced
-from assets_config import BIOMES, ASSETS, PROMPT_TEMPLATES, BIOME_ADJECTIVES, CHARACTER_FRAMES
+from assets_config import BIOMES, ASSETS, PROMPT_TEMPLATES, BIOME_ADJECTIVES, CHARACTER_FRAMES, PROCEDURAL_CATEGORIES, AI_CATEGORIES
+from procedural_tiles import TileGenerator
 
 def ensure_dir(path):
     if not os.path.exists(path):
@@ -184,6 +185,54 @@ def main():
             for item in items:
                 print(f"\n📦 {item} ({biome})")
                 
+                # ==== ROUTING HÍBRIDO: PROCEDURAL vs IA ====
+                if category in PROCEDURAL_CATEGORIES:
+                    # ✨ GENERACIÓN PROCEDURAL (tiles, caminos)
+                    print(f"  🔧 Generación procedural (rápida, tileable garantizado)")
+                    
+                    tile_gen = TileGenerator(tile_size=32)
+                    procedural_images = tile_gen.generate_batch(category, item, biome, count=args.count)
+                    
+                    # Guardar tiles procedurales directamente (no necesitan QA con IA)
+                    save_dir = os.path.join(args.output, biome, category)
+                    ensure_dir(save_dir)
+                    
+                    for idx, tile_img in enumerate(procedural_images):
+                        filename = f"{item.replace(' ', '_')}_{idx+1}.png"
+                        save_path = os.path.join(save_dir, filename)
+                        
+                        # Post-procesado opcional
+                        if apply_quantize:
+                            tile_img = quantize_colors(tile_img, num_colors=32)
+                        if apply_outline:
+                            tile_img = add_pixel_outline(tile_img)
+                        
+                        tile_img.save(save_path)
+                        
+                        # Guardar metadata simple
+                        meta_dir = os.path.join(save_dir, "metadata")
+                        ensure_dir(meta_dir)
+                        meta_path = os.path.join(meta_dir, filename.replace('.png', '.json'))
+                        
+                        metadata = {
+                            'method': 'procedural',
+                            'biome': biome,
+                            'category': category,
+                            'item': item,
+                            'variation': idx + 1,
+                            'tileable': True
+                        }
+                        
+                        with open(meta_path, 'w') as f:
+                            json.dump(metadata, f, indent=2)
+                        
+                        total_generated.value += 1
+                        completed_count.value += 1
+                    
+                    print(f"  ✅ {len(procedural_images)} tiles procedurales generados")
+                    continue  # Saltar el resto (no usar IA)
+                
+                # ==== GENERACIÓN CON IA (objetos complejos) ====
                 # Manejo especial para Characters (con frames de animación)
                 if category == "Characters":
                     # Generar cada frame del personaje
