@@ -293,61 +293,91 @@ def create_sprite_sheet(images: list[Image.Image], columns: int = 4) -> Image.Im
         
     return sprite_sheet
 
-def crop_to_content(image: Image.Image, padding: int = 10, alpha_threshold: int = 10, min_crop_ratio: float = 0.5) -> Image.Image:
+def crop_to_content(image: Image.Image, padding: int = 30, alpha_threshold: int = 5, min_crop_ratio: float = 0.3) -> Image.Image:
     """
-    Recorta la imagen al contenido visible con mejoras para tiles y paths.
+    Recorta la imagen al contenido visible con máxima preservación del objeto.
     
-    - alpha_threshold: Reducido a 10 (antes 50) para preservar sombras y detalles sutiles.
-    - padding: Aumentado a 10px (antes 2) para dar más margen.
-    - min_crop_ratio: Si el recorte resultaría en menos del 50% del área original, 
-      probablemente es un tile/path que debe mantener su tamaño completo.
+    MEJORADO V2:
+    -padding: 30px (antes 10) para preservar objetos completos
+    - alpha_threshold: 5 (antes 10) para capturar incluso detalles muy sutiles
+    - min_crop_ratio: 0.3 (antes 0.5) para permitir recortes más agresivos cuando sea apropiado
+    - Detección inteligente de objetos vs tiles
+    - Preservar proporciones originales si el objeto es muy pequeño
     """
     if image is None:
         return None
     
-    # Convertir a numpy para filtrado rápido
+    # Convertir a numpy
     img_np = np.array(image)
     
     # Si no tiene canal alpha, retornar sin cambios
     if len(img_np.shape) < 3 or img_np.shape[2] < 4:
         return image
         
-    # Crear máscara de píxeles visibles (Alpha > umbral)
+    # Crear máscara de píxeles visibles (Alpha > umbral muy bajo)
     alpha_channel = img_np[:, :, 3]
     mask = alpha_channel > alpha_threshold
     
-    # Si la imagen está vacía tras el filtrado
+    # Si la imagen está vacía
     if not np.any(mask):
         return image
         
-    # Encontrar bounding box de la máscara
+    # Encontrar bounding box
     rows = np.any(mask, axis=1)
     cols = np.any(mask, axis=0)
+    
+    if not np.any(rows) or not np.any(cols):
+        return image
     
     ymin, ymax = np.where(rows)[0][[0, -1]]
     xmin, xmax = np.where(cols)[0][[0, -1]]
     
-    # Añadir padding
     width, height = image.size
     
+    # PADDING GENEROSO para preservar objetos completos
     left = max(0, xmin - padding)
     upper = max(0, ymin - padding)
     right = min(width, xmax + 1 + padding)
     lower = min(height, ymax + 1 + padding)
     
-    # Calcular área del recorte vs área original
+    # Calcular dimensiones del recorte
     crop_width = right - left
     crop_height = lower - upper
     crop_area = crop_width * crop_height
     original_area = width * height
     crop_ratio = crop_area / original_area if original_area > 0 else 1.0
     
-    # Si el recorte es muy pequeño comparado con el original,
-    # probablemente es un tile/path que debe mantener dimensiones completas
-    # (ej: un camino de 768x768 que tras recorte quedaría en 200x200)
-    if crop_ratio < min_crop_ratio:
-        # No recortar, solo centrar el contenido en el canvas original
-        # Esto es útil para tiles que necesitan ser cuadrados
+    # DETECCIÓN INTELIGENTE:
+    # Si el objeto ocupa < 30% del área original, probablemente es un objeto pequeño
+    # que fue generado con mucho espacio blanco alrededor
+    # En este caso, SÍ recortar para aprovechar mejor el espacio
+    
+    # Si el objeto ocupa > 70% del área, probablemente es un tile o path
+    # que debe mantener sus dimensiones completas
+    if crop_ratio > 0.7:
+        # Es un tile/path - NO recortar
         return image
     
-    return image.crop((left, upper, right, lower))
+    # Para objetos pequeños/medianos, recortar con padding generoso
+    cropped = image.crop((left, upper, right, lower))
+    
+    # OPCIONAL: Si el recorte es muy pequeño (<100px en cualquier dimensión),
+    # expandir el canvas para tener al menos un tamaño mínimo usable
+    min_size = 128
+    if crop_width < min_size or crop_height < min_size:
+        # Crear canvas más grande y centrar el objeto
+        target_width = max(min_size, crop_width)
+        target_height = max(min_size, crop_height)
+        
+        # Crear canvas transparente
+        expanded = Image.new("RGBA", (target_width, target_height), (0, 0, 0, 0))
+        
+        # Centrar el objeto recortado
+        paste_x = (target_width - crop_width) // 2
+        paste_y = (target_height - crop_height) // 2
+        expanded.paste(cropped, (paste_x, paste_y))
+        
+        return expanded
+    
+    return cropped
+

@@ -15,6 +15,7 @@ import json
 
 from pixel_engine import PixelArtGenerator
 from image_utils import remove_background, crop_to_content, quantize_colors, add_pixel_outline, create_gif, create_sprite_sheet
+from pixel_post_process import pixelate_aggressive, apply_retro_palette, remove_background_pixel_safe
 from qa_evaluator import init_advanced_qa, evaluate_advanced
 from assets_config import BIOMES, ASSETS, PROMPT_TEMPLATES, BIOME_ADJECTIVES, CHARACTER_FRAMES, PROCEDURAL_CATEGORIES, AI_CATEGORIES
 from procedural_tiles import TileGenerator
@@ -23,7 +24,7 @@ def ensure_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def process_and_save_worker(task_queue, results_queue, apply_quantize, apply_outline, min_clip_score, min_aesthetic):
+def process_and_save_worker(task_queue, results_queue, apply_quantize, apply_outline, min_clip_score, min_aesthetic, pixel_size, palette_size, save_raw):
     """
     Worker CPU: Procesa y evalúa imágenes en paralelo.
     Si falla QA, envía señal para re-encolar.
@@ -59,23 +60,48 @@ def process_and_save_worker(task_queue, results_queue, apply_quantize, apply_out
             # ✅ Aprobada - Procesar y guardar
             print(f"   ✅ QA PASS: {task_id} (CLIP: {qa_result['clip_score']:.1f}, Aesthetic: {qa_result['aesthetic_score']:.1f})")
             
-            # 2. Procesamiento
-            img_no_bg = remove_background(image)
-            img_cropped = crop_to_content(img_no_bg)
+            # 2. GUARDAR VERSIÓN RAW (opcional pero recomendado para debug)
+            if save_raw:
+                raw_dir = os.path.join(os.path.dirname(save_path), "raw")
+                ensure_dir(raw_dir)
+                raw_filename = "raw_" + os.path.basename(save_path)
+                raw_path = os.path.join(raw_dir, raw_filename)
+                image.save(raw_path)
             
-            if apply_quantize:
-                img_cropped = quantize_colors(img_cropped, num_colors=32)
+            # 3. POST-PROCESADO MINIMALISTA
+            # Paso 1: Remover SOLO fondo blanco puro (255,255,255)
+            img_no_bg = remove_background_pixel_safe(image)
+            
+            # Paso 2: SOLO PIXELAR - preservar imagen completa
+            # Obtener tamaño original
+            original_size = max(img_no_bg.size)
+            
+            # PIXELADO AGRESIVO (downscale → paleta → upscale)
+            img_final = pixelate_aggressive(
+                img_no_bg,  # Sin fondo blanco pero preservando todo lo demás
+                target_pixel_size=pixel_size,
+                final_size=original_size,
+                palette_size=palette_size,
+                dither=False
+            )
+            
+            # Outline opcional (muy sutil)
             if apply_outline:
-                img_cropped = add_pixel_outline(img_cropped)
+                img_final = add_pixel_outline(img_final)
             
-            # 3. Guardar imagen
-            img_cropped.save(save_path)
+            # 4. Guardar imagen procesada
+            img_final.save(save_path)
             
-            # 4. Guardar metadata (con scores de QA)
+            # 5. Guardar metadata
             metadata['qa_scores'] = {
                 'clip_score': qa_result['clip_score'],
                 'aesthetic_score': qa_result['aesthetic_score'],
                 'is_pixel_art': qa_result['is_pixel_art']
+            }
+            metadata['pixelation'] = {
+                'target_pixel_size': pixel_size,
+                'palette_size': palette_size,
+                'pipeline': 'downscale→palette_reduction→upscale'
             }
             
             meta_dir = os.path.join(os.path.dirname(save_path), "metadata")
@@ -86,7 +112,7 @@ def process_and_save_worker(task_queue, results_queue, apply_quantize, apply_out
             with open(meta_path, 'w') as f:
                 json.dump(metadata, f, indent=2)
             
-            # 5. Notificar éxito
+            # 6. Notificar éxito
             results_queue.put({
                 'status': 'success',
                 'task_id': task_id,
@@ -104,6 +130,7 @@ def process_and_save_worker(task_queue, results_queue, apply_quantize, apply_out
                     'reason': str(e)
                 })
 
+
 def main():
     parser = argparse.ArgumentParser(description="Generador con Colas Retroalimentativas")
     parser.add_argument("--output", type=str, default="output_assets", help="Carpeta de salida")
@@ -117,6 +144,9 @@ def main():
     parser.add_argument("--min_aesthetic", type=float, default=6.0, help="Score mínimo estético (0-10)")
     parser.add_argument("--max_retries", type=int, default=3, help="Máximo de reintentos por imagen")
     parser.add_argument("--cpu_workers", type=int, default=30, help="Workers CPU para evaluación")
+    parser.add_argument("--pixel_size", type=int, default=64, help="Tamaño de pixelado (64=muy pixelado, 128=moderado)")
+    parser.add_argument("--palette_size", type=int, default=16, help="Colores en paleta (16=NES, 4=Gameboy, 32=SNES)")
+    parser.add_argument("--save_raw", action="store_true", help="Guardar versiones RAW sin procesar")
     
     args = parser.parse_args()
     
@@ -156,7 +186,9 @@ def main():
     for _ in range(args.cpu_workers):
         p = Process(
             target=process_and_save_worker,
-            args=(task_queue, results_queue, apply_quantize, apply_outline, args.min_clip_score, args.min_aesthetic)
+            args=(task_queue, results_queue, apply_quantize, apply_outline, 
+                  args.min_clip_score, args.min_aesthetic, 
+                  args.pixel_size, args.palette_size, args.save_raw)
         )
         p.start()
         workers.append(p)

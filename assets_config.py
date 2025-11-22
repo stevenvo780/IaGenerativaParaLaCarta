@@ -132,23 +132,23 @@ BIOME_ADJECTIVES = {
     "Ancient Ruins": "cracked, broken, mossy stone, weathered"
 }
 
-# Configuración de Prompts para SDXL (CALIDAD MÁXIMA)
+# Configuración de Prompts para SDXL (UN SOLO OBJETO, CALIDAD MÁXIMA)
 PROMPT_TEMPLATES = {
-    # Default: Enfocado en objeto único, máxima calidad pixel art
-    "default": "masterpiece, best quality, pixel art, single {adjective} {item} in {biome} style, centered, isolated on white background, sharp pixels, clean lines, vibrant colors, professional game asset, 16-bit style, no shadows, no background scenery, no text, no ui, highly detailed",
+    # Default: UN SOLO objeto, aislado, centrado
+    "default": "single {item}, ONE object only, centered, isolated sprite, white background, {adjective} {biome} style, masterpiece, best quality, sharp pixels, clean lines, vibrant colors, professional game asset, 16-bit style, no background elements",
     
-    # Characters: Estilo heroico/místico de alta calidad
-    "Characters": "masterpiece, best quality, pixel art, single {item}, {frame}, {biome} style, centered, full body, isolated on white background, sharp pixels, detailed sprite, professional character design, clean lines, vibrant colors, rpg style, no background, highly detailed",
+    # Characters: UN personaje, cuerpo completo
+    "Characters": "single {item}, {frame}, ONE character only, {biome} style, centered, full body sprite, isolated, white background, masterpiece, best quality, sharp pixels, detailed character, professional design, clean lines, vibrant colors, rpg style, no background",
     
-    # Terrain: Texturas de alta calidad
-    "Terrain": "masterpiece, best quality, pixel art, top down tile of {adjective} {item} in {biome} style, seamless texture, flat view, sharp pixels, clean tileable pattern, vibrant colors, professional game asset, 16-bit rpg style, no perspective, highly detailed",
+    # Terrain: Tiles limpios (estos sí pueden tener textura completa)
+    "Terrain": "top down tile, {adjective} {item}, {biome} style, seamless texture, flat view, sharp pixels, clean tileable pattern, vibrant colors, professional game asset, 16-bit rpg style, no perspective",
     
-    # Paths: Caminos detallados
-    "Paths": "masterpiece, best quality, pixel art, top down tile of {adjective} {item} in {biome} style, seamless texture, flat view, sharp pixels, clean path pattern, vibrant colors, professional game asset, 16-bit rpg style, no perspective, highly detailed",
+    # Paths: Caminos limpios
+    "Paths": "top down tile, {adjective} {item}, {biome} style, seamless texture, flat view, sharp pixels, clean path pattern, vibrant colors, professional game asset, 16-bit rpg style, no perspective",
     
-    # UI_Icons: Iconos nítidos
-    "UI_Icons": "masterpiece, best quality, pixel art, icon of {item}, UI element, sharp pixels, clean design, high contrast, vibrant colors, centered, white background, simple, professional game ui, 16-bit style, highly detailed",
+    # UI_Icons: Iconos simples
+    "UI_Icons": "single icon, {item}, ONE object only, UI element, sharp pixels, clean design, high contrast, vibrant colors, centered, white background, simple, professional game ui, 16-bit style",
     
-    # Effects: Efectos de alta calidad
-    "Effects": "masterpiece, best quality, pixel art, {adjective} {item} in {biome} style, game effect, sharp pixels, vibrant colors, clean design, isolated, white background, professional vfx, highly detailed"
+    # Effects: Efectos aislados
+    "Effects": "single effect, {item}, ONE object only, {adjective} {biome} style, game effect, sharp pixels, vibrant colors, clean design, isolated, white background, professional vfx"
 }

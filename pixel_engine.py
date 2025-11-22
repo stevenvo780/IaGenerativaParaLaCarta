@@ -25,10 +25,11 @@ class PixelArtGenerator:
         # Configurar Scheduler
         self.pipe.scheduler = EulerDiscreteScheduler.from_config(self.pipe.scheduler.config)
         
-        # Cargar LoRA
-        print(f"Cargando LoRA: {self.lora_id}...")
+        # Cargar LoRA con PESO MÁXIMO para estilo pixel art fuerte
+        print(f"Cargando LoRA: {self.lora_id} (weight: 1.0)...")
         self.pipe.load_lora_weights(self.lora_id)
-        self.pipe.fuse_lora() # Fusionar para mejor rendimiento
+        # NO fusionar - usar scale en cross_attention para control fino
+        # self.pipe.fuse_lora()
         
         # Revertido a .to(device) por problemas de tipos con Offload
         self.pipe.to(self.device)
@@ -55,15 +56,16 @@ class PixelArtGenerator:
     def generate(
         self,
         prompt: str,
-        negative_prompt: str = "blurry, low quality, photo, realistic, 3d render, multiple objects, grid, collage, text, watermark, signature, cropped, out of frame",
+        negative_prompt: str = "smooth, anti-aliased, blurry, gradient, high resolution, detailed, photorealistic, 3d, vector art, modern graphics, soft edges",
         num_inference_steps: int = 30,
         guidance_scale: float = 7.5,
-        width: int = 768, # Reducido de 1024 para evitar OOM con IP-Adapter
-        height: int = 768, # Reducido de 1024 para evitar OOM con IP-Adapter
+        width: int = 512,  # REDUCIDO para pixel art más auténtico
+        height: int = 512,  # REDUCIDO para pixel art más auténtico  
         num_images: int = 1,
         seed: int = None,
-        ip_adapter_image = None, # Imagen de referencia para estilo
-        ip_adapter_scale: float = 0.6
+        ip_adapter_image = None,
+        ip_adapter_scale: float = 0.6,
+        lora_scale: float = 1.0  # Weight del LoRA (1.0 = máximo)
     ):
         """
         Genera imágenes basadas en el prompt.
@@ -72,9 +74,9 @@ class PixelArtGenerator:
         if self.pipe is None:
             raise RuntimeError("El modelo no está cargado. Llama a load_model() primero.")
             
-        # Trigger word del LoRA suele ser 'pixel art'
-        prompt = f"pixel art, {prompt}, sharp, detailed, 8-bit, retro game asset"
-        negative_prompt = f"blur, fuzzy, realistic, photo, 3d render, vector, smooth, {negative_prompt}"
+        # Prompts ULTRA ESPECÍFICOS para UN SOLO objeto aislado con FONDO BLANCO
+        prompt = f"pixel art, SINGLE {prompt}, ONE object only, centered, isolated, plain white background, pure white background (#FFFFFF), sprite, 16-bit, sharp pixels, crisp, low resolution, limited color palette, no anti-aliasing, gameboy style, nes graphics, retro game asset"
+        negative_prompt = f"colored background, gradient background, textured background, ground, floor, multiple objects, many items, group, collection, scattered, decorations, landscape, scenery, background elements, environment, grass, rocks, multiple, several, many, smooth, gradient, anti-aliased, blurry, high detail, photorealistic, 3d render, vector art, modern, {negative_prompt}"
 
         # Gestión de Seed para reproducibilidad
         if seed is None:
@@ -99,6 +101,7 @@ class PixelArtGenerator:
             "height": height,
             "num_images_per_prompt": num_images,
             "generator": generator,
+            "cross_attention_kwargs": {"scale": lora_scale}  # LoRA weight
         }
         
         if ip_adapter_image is not None:
