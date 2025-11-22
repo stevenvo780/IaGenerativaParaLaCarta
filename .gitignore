@@ -2,4 +2,5 @@ venv/*
 .git
 __pycache__
 .env
-output_assets/*
+output_assets_procedural/*
+test_procedural/*
