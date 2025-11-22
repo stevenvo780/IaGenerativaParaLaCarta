@@ -55,6 +55,119 @@ def pixelate(image: Image.Image, pixel_size: int = 8) -> Image.Image:
     # Escalar de vuelta al tamaño original usando NEAREST para el efecto pixelado
     return image_small.resize((w, h), resample=Image.Resampling.NEAREST)
 
+def quantize_colors(image: Image.Image, num_colors: int = 32) -> Image.Image:
+    """
+    Reduce la paleta de colores de la imagen para un look más 'pixel art'.
+    Usa K-Means (via PIL quantize) para encontrar los colores dominantes.
+    """
+    if image.mode != "RGBA":
+        image = image.convert("RGBA")
+        
+    # Separar alfa para no cuantizarlo mal
+    alpha = image.split()[3]
+    rgb_image = image.convert("RGB")
+    
+    # Cuantizar (Fast Octree es el default de PIL y funciona bien para pixel art)
+    quantized_rgb = rgb_image.quantize(colors=num_colors, method=1).convert("RGB")
+    
+    # Restaurar alfa
+    quantized_rgb.putalpha(alpha)
+    return quantized_rgb
+
+def add_pixel_outline(image: Image.Image, color: tuple = (0, 0, 0), thickness: int = 1) -> Image.Image:
+    """
+    Añade un contorno de pixel art alrededor del contenido opaco.
+    """
+    if image.mode != "RGBA":
+        image = image.convert("RGBA")
+        
+    # Obtener máscara de transparencia
+    alpha = np.array(image.split()[3])
+    
+    # Crear kernel para dilatación
+    # Un kernel de 3x3 con cruz central expande 1 pixel en 4 direcciones
+    kernel_size = 1 + (thickness * 2)
+    kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
+    
+    # Binarizar alfa (>0 es contenido)
+    mask = (alpha > 0).astype(np.uint8) * 255
+    
+    # Dilatar máscara (expandir bordes)
+    # Usamos scipy.ndimage.binary_dilation o max filter manual si no queremos deps extra
+    # Aquí usamos PIL filter para simplicidad y velocidad
+    from PIL import ImageFilter
+    
+    # Método simple: Desplazar la imagen en 8 direcciones y combinar
+    outline_mask = Image.new("L", image.size, 0)
+    alpha_layer = image.split()[3]
+    
+    # Desplazamientos para grosor 1: 8 vecinos
+    offsets = [(-1, -1), (0, -1), (1, -1),
+               (-1,  0),          (1,  0),
+               (-1,  1), (0,  1), (1,  1)]
+               
+    for ox, oy in offsets:
+        # Desplazar canal alfa
+        shifted = alpha_layer.transform(alpha_layer.size, Image.AFFINE, (1, 0, -ox, 0, 1, -oy))
+        # Sumar a la máscara de borde
+        outline_mask = Image.fromarray(np.maximum(np.array(outline_mask), np.array(shifted)))
+    
+    # El borde es: (Dilatado - Original) > 0
+    # Pero queremos dibujar el borde DETRÁS de la imagen original
+    
+    # Crear imagen solida del color del borde
+    outline_layer = Image.new("RGBA", image.size, color + (255,))
+    outline_layer.putalpha(outline_mask)
+    
+    # Componer: Borde abajo, Imagen original arriba
+    final_image = Image.alpha_composite(outline_layer, image)
+    return final_image
+
+def create_gif(frames: list, output_path: str, duration: int = 150, loop: int = 0):
+    """Crea un GIF animado a partir de una lista de imágenes PIL."""
+    if not frames:
+        return
+    
+    # Asegurar que todos sean RGBA y del mismo tamaño (ya deberían serlo por crop_to_content si se procesaron igual)
+    # Pero para seguridad, usamos el tamaño del primero
+    base_size = frames[0].size
+    processed_frames = []
+    for f in frames:
+        if f.size != base_size:
+            f = f.resize(base_size, Image.NEAREST)
+        processed_frames.append(f)
+        
+    processed_frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=processed_frames[1:],
+        optimize=False, # False para mantener calidad pixel art
+        duration=duration,
+        loop=loop,
+        disposal=2 # Restaurar fondo para transparencia
+    )
+
+def validate_image(image: Image.Image) -> bool:
+    """
+    QA Básico: Retorna False si la imagen es inválida (negra, vacía, corrupta).
+    """
+    if image is None: return False
+    
+    # Verificar si es totalmente transparente
+    if image.mode == "RGBA":
+        extrema = image.getextrema()
+        if extrema[3][1] == 0: # Canal Alfa max es 0 (totalmente transparente)
+            return False
+            
+    # Verificar si es totalmente negra (en canales RGB)
+    # Convertir a grayscale para chequeo rápido
+    gray = image.convert("L")
+    extrema = gray.getextrema()
+    if extrema[0] == 0 and extrema[1] == 0: # Todo negro
+        return False
+        
+    return True
+
 def create_sprite_sheet(images: list[Image.Image], columns: int = 4) -> Image.Image:
     """Combina una lista de imágenes en un sprite sheet."""
     if not images:

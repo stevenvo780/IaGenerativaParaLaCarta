@@ -6,7 +6,15 @@ from PIL import Image
 import gc
 import json
 from pixel_engine import PixelArtGenerator
-from image_utils import remove_background, crop_to_content, create_sprite_sheet
+from image_utils import (
+    remove_background, 
+    crop_to_content, 
+    create_sprite_sheet, 
+    quantize_colors, 
+    add_pixel_outline, 
+    create_gif, 
+    validate_image
+)
 from assets_config import BIOMES, ASSETS, PROMPT_TEMPLATES, BIOME_ADJECTIVES
 from PIL import Image
 
@@ -14,14 +22,29 @@ def ensure_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def process_and_save_image(image, save_path):
+def process_and_save_image(image, save_path, apply_quantize=True, apply_outline=True):
     """Función worker para procesar y guardar imágenes en segundo plano."""
     try:
+        # 0. QA Básico
+        if not validate_image(image):
+            print(f"Skipping invalid image: {save_path}")
+            return
+
         # 1. Quitar fondo
         img_no_bg = remove_background(image)
+        
         # 2. Recorte automático
         img_cropped = crop_to_content(img_no_bg)
-        # 3. Guardar
+        
+        # 3. Cuantización de Color (Paleta)
+        if apply_quantize:
+            img_cropped = quantize_colors(img_cropped, num_colors=32)
+            
+        # 4. Outline (Borde)
+        if apply_outline:
+            img_cropped = add_pixel_outline(img_cropped, color=(0,0,0), thickness=1)
+            
+        # 5. Guardar
         img_cropped.save(save_path)
         # print(f"Guardado: {save_path}") # Demasiado ruido en consola
     except Exception as e:
@@ -34,8 +57,14 @@ def main():
     parser.add_argument("--category", type=str, default="all", help="Categoría específica o 'all'")
     parser.add_argument("--count", type=int, default=1, help="Número de variaciones por asset")
     parser.add_argument("--style_strength", type=float, default=0.6, help="Fuerza del estilo IP-Adapter (0.0 a 1.0)")
+    parser.add_argument("--no_quantize", action="store_true", help="Desactivar reducción de paleta")
+    parser.add_argument("--no_outline", action="store_true", help="Desactivar borde negro")
     
     args = parser.parse_args()
+    
+    # Lógica inversa para flags negativos
+    apply_quantize = not args.no_quantize
+    apply_outline = not args.no_outline
     
     ensure_dir(args.output)
     
@@ -61,6 +90,7 @@ def main():
     
     total_tasks = len(biomes_to_process) * sum(len(ASSETS[c]) for c in categories_to_process) * args.count
     print(f"Iniciando generación de {total_tasks} assets con Pipeline Asíncrono...")
+    print(f"Mejoras activas: Paleta={apply_quantize}, Outline={apply_outline}")
     
     # ThreadPool para procesamiento en background (CPU bound tasks)
     # Aumentamos a 30 workers para aprovechar la CPU de 32 hilos del usuario
@@ -114,8 +144,17 @@ def main():
                         
                         processed_frames = []
                         for i, (img, frame_name) in enumerate(zip(frames_images, CHARACTER_FRAMES)):
+                            # Procesado manual aquí para poder usar los frames procesados en el GIF/SpriteSheet
+                            if not validate_image(img): continue
+                            
                             img_no_bg = remove_background(img)
                             img_cropped = crop_to_content(img_no_bg)
+                            
+                            if apply_quantize:
+                                img_cropped = quantize_colors(img_cropped, num_colors=32)
+                            if apply_outline:
+                                img_cropped = add_pixel_outline(img_cropped)
+                                
                             processed_frames.append(img_cropped)
                             
                             safe_frame_name = frame_name.replace(" ", "_").replace(",", "")
@@ -127,10 +166,16 @@ def main():
                             with open(meta_path, 'w') as f:
                                 json.dump(frames_metadata[i], f, indent=2)
                         
+                        # Crear Sprite Sheet
                         from image_utils import create_sprite_sheet
                         sprite_sheet = create_sprite_sheet(processed_frames, columns=len(processed_frames))
                         if sprite_sheet:
                             sprite_sheet.save(os.path.join(save_dir, "sprite_sheet_full.png"))
+                            
+                        # Crear GIF Animado (NUEVO)
+                        if processed_frames:
+                            gif_path = os.path.join(save_dir, "animation_preview.gif")
+                            create_gif(processed_frames, gif_path, duration=200, loop=0)
                             
                     else:
                         # Lógica estándar para otros assets
@@ -163,10 +208,10 @@ def main():
                             with open(meta_path, 'w') as f:
                                 json.dump(meta, f, indent=2)
                             
-                            # Procesar y guardar
+                            # Procesar y guardar (con argumentos de mejoras)
                             filename = f"{base_filename}_{variation_idx+1}.png"
                             save_path = os.path.join(save_dir, filename)
-                            executor.submit(process_and_save_image, images[0], save_path)
+                            executor.submit(process_and_save_image, images[0], save_path, apply_quantize, apply_outline)
                             
                             # Limpiar memoria después de cada imagen
                             if variation_idx % 5 == 0:  # Cada 5 imágenes
