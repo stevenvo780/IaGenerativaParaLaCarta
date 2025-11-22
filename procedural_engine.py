@@ -305,105 +305,371 @@ class ProceduralEngine:
                 
         return img
 
+        return img
+
     def generate_structure(self, biome: str, item: str, variation: int = 0) -> Image.Image:
-        """Genera estructuras (Casas, Muros, etc.)"""
+        """
+        Genera estructuras COMPLEJAS usando BuildingComposer (V10.1)
+        Compone volúmenes, aplica texturas y añade detalles arquitectónicos.
+        """
+        random.seed(variation)
+        np.random.seed(variation)
+        img = Image.new("RGBA", (self.tile_size, self.tile_size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        # --- PALETAS ---
+        dirt_palette = self.get_palette(biome, "dirt")
+        wall_base = dirt_palette[0]
+        wood_color = dirt_palette[1]
+        roof_base = dirt_palette[-1]
+        if biome == "Snowy Tundra":
+            roof_base = (200, 220, 240) # Techo nevado
+        elif biome == "Desert":
+            roof_base = (200, 150, 100) # Techo de arcilla
+            
+        # --- DEFINICIÓN DE VOLÚMENES ---
+        # Un edificio se compone de 1 a 3 volúmenes
+        volumes = []
+        
+        # 1. Cuerpo Principal
+        main_w = random.randint(int(self.tile_size*0.4), int(self.tile_size*0.7))
+        main_h = random.randint(int(self.tile_size*0.3), int(self.tile_size*0.5))
+        main_x = (self.tile_size - main_w) // 2
+        main_y = self.tile_size - main_h - 4
+        volumes.append({
+            "type": "main", "x": main_x, "y": main_y, "w": main_w, "h": main_h, 
+            "z": 1, "roof": "gabled"
+        })
+        
+        # 2. Ala Lateral o Torre (Opcional)
+        if random.random() > 0.4:
+            if random.random() > 0.5:
+                # Ala lateral (más baja)
+                wing_w = random.randint(int(main_w*0.4), int(main_w*0.6))
+                wing_h = int(main_h * 0.7)
+                wing_x = main_x - wing_w + 5 if random.random() > 0.5 else main_x + main_w - 5
+                wing_y = main_y + (main_h - wing_h)
+                volumes.append({
+                    "type": "wing", "x": wing_x, "y": wing_y, "w": wing_w, "h": wing_h, 
+                    "z": 0, "roof": "shed" # Techo a un agua
+                })
+            else:
+                # Torre (más alta)
+                tower_w = int(main_w * 0.4)
+                tower_h = int(main_h * 1.4)
+                tower_x = main_x - 5 if random.random() > 0.5 else main_x + main_w - tower_w + 5
+                tower_y = main_y + main_h - tower_h
+                volumes.append({
+                    "type": "tower", "x": tower_x, "y": tower_y, "w": tower_w, "h": tower_h, 
+                    "z": 2, "roof": "peaked"
+                })
+        
+        # Ordenar por Z (pintor)
+        volumes.sort(key=lambda v: v["z"])
+        
+        # --- RENDERIZADO ---
+        for vol in volumes:
+            vx, vy, vw, vh = vol["x"], vol["y"], vol["w"], vol["h"]
+            
+            # 1. PAREDES CON TEXTURA
+            # Ruido para textura
+            noise = np.random.rand(vh, vw)
+            
+            for py in range(vh):
+                for px in range(vw):
+                    # Textura procedural (Ladrillo o Madera)
+                    is_detail = False
+                    
+                    if "house" in item or "cottage" in item:
+                        # Madera/Entramado
+                        if px % 10 == 0 or py % 15 == 0: # Vigas
+                            color = wood_color
+                            is_detail = True
+                        else:
+                            color = wall_base
+                    else:
+                        # Piedra/Ladrillo
+                        if (py % 6 == 0) or (py % 12 < 6 and px % 10 == 0) or (py % 12 >= 6 and (px+5) % 10 == 0):
+                            color = tuple(max(0, c - 20) for c in wall_base) # Junta oscura
+                        else:
+                            color = wall_base
+                            
+                    # Aplicar ruido
+                    n = noise[py, px] * 20 - 10
+                    r, g, b = color
+                    if not is_detail:
+                        r = max(0, min(255, int(r + n)))
+                        g = max(0, min(255, int(g + n)))
+                        b = max(0, min(255, int(b + n)))
+                    
+                    # BOUNDS CHECK (CRITICAL FIX)
+                    draw_x, draw_y = vx + px, vy + py
+                    if 0 <= draw_x < self.tile_size and 0 <= draw_y < self.tile_size:
+                        img.putpixel((draw_x, draw_y), (r, g, b, 255))
+            
+            # Outline Pared
+            draw.rectangle([vx, vy, vx+vw, vy+vh], outline=(0,0,0,255))
+            
+            # 2. TECHO
+            roof_h = vh // 2
+            if vol["roof"] == "gabled":
+                # Dos aguas (Triángulo)
+                points = [(vx-4, vy), (vx+vw+4, vy), (vx+vw//2, vy-roof_h)]
+                draw.polygon(points, fill=roof_base+(255,), outline=(0,0,0,255))
+                # Tejas
+                for i in range(0, roof_h, 4):
+                    y_level = vy - i
+                    width_at_y = int(vw + 8 - (i/roof_h)*(vw+8))
+                    start_x = vx + vw//2 - width_at_y//2
+                    draw.line([(start_x, y_level), (start_x+width_at_y, y_level)], fill=(0,0,0,50))
+                    
+            elif vol["roof"] == "shed":
+                # Un agua (Trapecio)
+                points = [(vx-2, vy), (vx+vw+2, vy), (vx+vw+2, vy-roof_h//2), (vx-2, vy-roof_h)]
+                draw.polygon(points, fill=roof_base+(255,), outline=(0,0,0,255))
+                
+            elif vol["roof"] == "peaked":
+                # Torre (Pico alto)
+                points = [(vx-2, vy), (vx+vw+2, vy), (vx+vw//2, vy-roof_h*1.5)]
+                draw.polygon(points, fill=roof_base+(255,), outline=(0,0,0,255))
+            
+            # 3. DETALLES (Puertas y Ventanas)
+            if vol["type"] == "main":
+                # Puerta
+                dw, dh = vw//4, vh//2
+                dx, dy = vx + (vw-dw)//2, vy + vh - dh
+                draw.rectangle([dx, dy, dx+dw, dy+dh], fill=wood_color+(255,), outline=(0,0,0,255))
+                # Marco
+                draw.rectangle([dx-1, dy-1, dx+dw+1, dy+dh], outline=(50,30,10,255))
+                
+            # Ventanas
+            if vol["type"] == "tower" or (vol["type"] == "main" and random.random() > 0.3):
+                ww, wh = 6, 8
+                wx = vx + vw//2 - ww//2
+                wy = vy + vh//3
+                # Cristal
+                draw.rectangle([wx, wy, wx+ww, wy+wh], fill=(100,200,255,200), outline=(0,0,0,255))
+                # Cruz
+                draw.line([(wx+ww//2, wy), (wx+ww//2, wy+wh)], fill=(0,0,0,255))
+                draw.line([(wx, wy+wh//2), (wx+ww, wy+wh//2)], fill=(0,0,0,255))
+
+        return img
+
+    def generate_prop(self, biome: str, item: str, variation: int = 0) -> Image.Image:
+        """Genera props DETALLADOS con perspectiva y texturas"""
         random.seed(variation)
         img = Image.new("RGBA", (self.tile_size, self.tile_size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
         # Paletas
-        wall_color = self.get_palette(biome, "dirt")[0]
-        roof_color = self.get_palette(biome, "dirt")[-1]
-        wood_color = self.get_palette(biome, "dirt")[1]
+        dirt_palette = self.get_palette(biome, "dirt")
+        wood_light = dirt_palette[1]
+        wood_dark = dirt_palette[-1]
+        metal_color = (100, 100, 110)
         
-        if "house" in item.lower() or "cottage" in item.lower():
-            # Casa simple
-            width = random.randint(self.tile_size//2, int(self.tile_size*0.8))
-            height = random.randint(self.tile_size//3, self.tile_size//2)
-            x = (self.tile_size - width) // 2
-            y = self.tile_size - height - 5
+        cx, cy = self.tile_size // 2, self.tile_size // 2
+        
+        item_lower = item.lower()
+        
+        if "barrel" in item_lower:
+            # Barril con volumen
+            w, h = 22, 28
+            x, y = cx - w//2, cy - h//2
             
-            # Paredes
-            draw.rectangle([x, y, x+width, y+height], fill=wall_color+(255,), outline=(0,0,0,255))
+            # Cuerpo (gradiente horizontal falso)
+            for i in range(w):
+                shade = abs(i - w//2) * 3
+                c = tuple(max(0, ch - shade) for ch in wood_light)
+                draw.line([(x+i, y), (x+i, y+h)], fill=c+(255,))
+                
+            # Bandas metálicas
+            draw.rectangle([x, y+4, x+w, y+8], fill=metal_color+(255,))
+            draw.rectangle([x, y+h-8, x+w, y+h-4], fill=metal_color+(255,))
+            # Outline
+            draw.rectangle([x, y, x+w, y+h], outline=(0,0,0,255))
             
-            # Techo (Triangular)
-            roof_height = height // 2
+        elif "chest" in item_lower:
+            # Cofre con tapa curva
+            w, h = 26, 18
+            x, y = cx - w//2, cy - h//2 + 4
+            
+            # Base
+            draw.rectangle([x, y, x+w, y+h], fill=wood_dark+(255,), outline=(0,0,0,255))
+            # Tapa (Arco)
+            draw.pieslice([x, y-10, x+w, y+10], 180, 360, fill=wood_light+(255,), outline=(0,0,0,255))
+            # Cerradura
+            draw.rectangle([cx-3, y-2, cx+3, y+4], fill=(255,215,0,255), outline=(0,0,0,255))
+            
+        elif "table" in item_lower:
+            # Mesa isométrica simple
+            w, d, h = 30, 16, 14 # ancho, profundidad, altura
+            x, y = cx - w//2, cy
+            
+            # Patas traseras
+            draw.rectangle([x+2, y-4, x+5, y+h-4], fill=wood_dark+(255,))
+            draw.rectangle([x+w-5, y-4, x+w-2, y+h-4], fill=wood_dark+(255,))
+            
+            # Tablero (Perspectiva)
+            # Top
             draw.polygon([
-                (x-5, y), 
-                (x+width+5, y), 
-                (x+width//2, y-roof_height)
-            ], fill=roof_color+(255,), outline=(0,0,0,255))
+                (x, y), (x+w, y), (x+w+4, y-8), (x+4, y-8)
+            ], fill=wood_light+(255,), outline=(0,0,0,255))
+            # Borde frontal
+            draw.rectangle([x, y, x+w, y+3], fill=wood_dark+(255,), outline=(0,0,0,255))
             
-            # Puerta
-            door_w = width // 4
-            door_h = height // 2
-            door_x = x + (width - door_w) // 2
-            door_y = y + height - door_h
-            draw.rectangle([door_x, door_y, door_x+door_w, door_y+door_h], fill=wood_color+(255,), outline=(0,0,0,255))
+            # Patas delanteras
+            draw.rectangle([x, y+3, x+3, y+h], fill=wood_dark+(255,), outline=(0,0,0,255))
+            draw.rectangle([x+w-3, y+3, x+w, y+h], fill=wood_dark+(255,), outline=(0,0,0,255))
             
-        elif "wall" in item.lower():
-            # Muro
-            height = self.tile_size // 2
-            y = self.tile_size - height
-            draw.rectangle([0, y, self.tile_size, y+height], fill=wall_color+(255,), outline=(0,0,0,255))
-            # Ladrillos
-            for i in range(0, self.tile_size, 10):
-                draw.line([(i, y), (i, y+height)], fill=(0,0,0,100))
-                
-        elif "fence" in item.lower():
-            # Cerca de madera
-            post_w = 4
-            height = self.tile_size // 3
-            y = self.tile_size - height
+        elif "chair" in item_lower or "bench" in item_lower:
+            # Silla/Banco
+            w = 24 if "bench" in item_lower else 14
+            h_seat = 12
+            h_back = 24
+            x, y = cx - w//2, cy + 5
             
-            # Postes
-            for i in range(5, self.tile_size, 15):
-                draw.rectangle([i, y, i+post_w, y+height], fill=wood_color+(255,), outline=(0,0,0,255))
-                
-            # Travesaños
-            draw.rectangle([0, y+5, self.tile_size, y+9], fill=wood_color+(255,), outline=(0,0,0,255))
-            draw.rectangle([0, y+height-10, self.tile_size, y+height-6], fill=wood_color+(255,), outline=(0,0,0,255))
+            # Patas traseras
+            draw.rectangle([x, y-h_back, x+2, y], fill=wood_dark+(255,))
+            draw.rectangle([x+w-2, y-h_back, x+w, y], fill=wood_dark+(255,))
+            
+            # Respaldo
+            draw.rectangle([x, y-h_back, x+w, y-h_back+8], fill=wood_light+(255,), outline=(0,0,0,255))
+            
+            # Asiento
+            draw.polygon([
+                (x-2, y), (x+w+2, y), (x+w+4, y-4), (x, y-4)
+            ], fill=wood_light+(255,), outline=(0,0,0,255))
+            
+            # Patas delanteras
+            draw.rectangle([x-2, y, x, y+h_seat], fill=wood_dark+(255,), outline=(0,0,0,255))
+            draw.rectangle([x+w, y, x+w+2, y+h_seat], fill=wood_dark+(255,), outline=(0,0,0,255))
+
+        elif "lamp" in item_lower or "lantern" in item_lower:
+            # Lámpara de calle
+            h = 40
+            x, y = cx, cy + h//2
+            
+            # Poste
+            draw.rectangle([x-2, y-h, x+2, y], fill=(50,50,50,255), outline=(0,0,0,255))
+            # Base
+            draw.polygon([(x-6, y), (x+6, y), (x+2, y-4), (x-2, y-4)], fill=(40,40,40,255))
+            
+            # Linterna
+            ly = y - h
+            draw.rectangle([x-6, ly-12, x+6, ly], fill=(255,255,200,200), outline=(0,0,0,255)) # Cristal
+            draw.line([(x-6, ly-12), (x+6, ly)], fill=(0,0,0,100)) # Cruz
+            draw.line([(x+6, ly-12), (x-6, ly)], fill=(0,0,0,100))
+            
+            # Tapa
+            draw.polygon([(x-8, ly-12), (x+8, ly-12), (x, ly-18)], fill=(50,50,50,255))
+            
+            # Glow (Halo)
+            draw.ellipse([x-15, ly-20, x+15, ly+10], outline=(255,255,0,100), width=1)
+            
+        elif "crate" in item_lower:
+            # Caja de madera (Cubo con X)
+            s = 24
+            x, y = cx - s//2, cy - s//2
+            draw.rectangle([x, y, x+s, y+s], fill=wood_light+(255,), outline=(0,0,0,255))
+            draw.rectangle([x, y, x+s, y+s], outline=(0,0,0,255), width=2) # Borde grueso
+            draw.line([(x, y), (x+s, y+s)], fill=(0,0,0,100), width=2)
+            draw.line([(x+s, y), (x, y+s)], fill=(0,0,0,100), width=2)
+            
+        else:
+            # Fallback genérico (Caja misteriosa)
+            s = 20
+            x, y = cx - s//2, cy - s//2
+            draw.rectangle([x, y, x+s, y+s], fill=(100,100,100,255), outline=(0,0,0,255))
+            draw.text((x+5, y+2), "?", fill=(255,255,255,255))
             
         return img
 
-    def generate_prop(self, biome: str, item: str, variation: int = 0) -> Image.Image:
-        """Genera props (Muebles, Barriles, etc.)"""
+    def generate_item(self, biome: str, item: str, variation: int = 0) -> Image.Image:
+        """Genera items de inventario (Herramientas, Comida, Pociones)"""
         random.seed(variation)
         img = Image.new("RGBA", (self.tile_size, self.tile_size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        wood_color = self.get_palette(biome, "dirt")[1]
-        dark_wood = self.get_palette(biome, "dirt")[-1]
-        
         cx, cy = self.tile_size // 2, self.tile_size // 2
         
-        if "barrel" in item.lower():
-            w, h = 20, 26
-            x, y = cx - w//2, cy - h//2
-            # Cuerpo
-            draw.rectangle([x, y, x+w, y+h], fill=wood_color+(255,), outline=(0,0,0,255))
-            # Aros
-            draw.line([(x, y+5), (x+w, y+5)], fill=(0,0,0,255), width=2)
-            draw.line([(x, y+h-5), (x+w, y+h-5)], fill=(0,0,0,255), width=2)
+        if "sword" in item.lower():
+            # Espada
+            # Mango
+            draw.line([(cx, cy+10), (cx, cy+25)], fill=(139,69,19,255), width=3)
+            # Guarda
+            draw.line([(cx-6, cy+10), (cx+6, cy+10)], fill=(192,192,192,255), width=3)
+            # Hoja
+            draw.polygon([(cx-2, cy+10), (cx+2, cy+10), (cx, cy-20)], fill=(220,220,220,255), outline=(100,100,100,255))
             
-        elif "chest" in item.lower():
-            w, h = 24, 16
-            x, y = cx - w//2, cy - h//2
-            # Caja
-            draw.rectangle([x, y, x+w, y+h], fill=wood_color+(255,), outline=(0,0,0,255))
-            # Tapa (línea)
-            draw.line([(x, y+5), (x+w, y+5)], fill=(0,0,0,255), width=1)
-            # Cerradura
-            draw.rectangle([cx-2, y+3, cx+2, y+7], fill=(255,215,0,255), outline=(0,0,0,255))
+        elif "axe" in item.lower():
+            # Hacha
+            # Mango
+            draw.line([(cx, cy-10), (cx, cy+20)], fill=(139,69,19,255), width=3)
+            # Cabeza
+            draw.pieslice([cx-10, cy-15, cx+10, cy+5], 180, 360, fill=(169,169,169,255), outline=(0,0,0,255))
             
-        elif "table" in item.lower():
-            w, h = 28, 16
-            x, y = cx - w//2, cy
-            # Patas
-            draw.rectangle([x+2, y, x+6, y+12], fill=dark_wood+(255,), outline=(0,0,0,255))
-            draw.rectangle([x+w-6, y, x+w-2, y+12], fill=dark_wood+(255,), outline=(0,0,0,255))
-            # Tablero (perspectiva top-down ligera)
-            draw.rectangle([x, y-4, x+w, y+4], fill=wood_color+(255,), outline=(0,0,0,255))
+        elif "potion" in item.lower():
+            # Poción
+            # Botella
+            w, h = 12, 16
+            draw.rectangle([cx-w//2, cy-h//2, cx+w//2, cy+h//2], outline=(200,200,200,255))
+            # Cuello
+            draw.rectangle([cx-3, cy-h//2-4, cx+3, cy-h//2], outline=(200,200,200,255))
+            # Líquido
+            color = (255, 0, 0, 200) if "health" in item else (0, 0, 255, 200)
+            draw.rectangle([cx-w//2+1, cy, cx+w//2-1, cy+h//2-1], fill=color)
+            
+        elif "apple" in item.lower():
+            # Manzana
+            draw.ellipse([cx-8, cy-8, cx+8, cy+8], fill=(255,0,0,255), outline=(100,0,0,255))
+            draw.line([(cx, cy-8), (cx, cy-12)], fill=(0,100,0,255), width=2)
+            
+        elif "bread" in item.lower():
+            # Pan
+            draw.ellipse([cx-12, cy-6, cx+12, cy+6], fill=(210,180,140,255), outline=(139,69,19,255))
+            
+        elif "ore" in item.lower() or "stone" in item.lower():
+            # Mineral
+            color = (128,128,128,255)
+            if "gold" in item: color = (255,215,0,255)
+            elif "iron" in item: color = (192,192,192,255)
+            
+            draw.polygon([
+                (cx-5, cy), (cx, cy-5), (cx+5, cy), (cx, cy+5)
+            ], fill=color, outline=(0,0,0,255))
+            
+        return img
+
+    def generate_icon(self, biome: str, item: str, variation: int = 0) -> Image.Image:
+        """Genera iconos de UI"""
+        random.seed(variation)
+        img = Image.new("RGBA", (self.tile_size, self.tile_size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        cx, cy = self.tile_size // 2, self.tile_size // 2
+        size = self.tile_size // 2
+        
+        color = (255, 255, 255, 255)
+        if "defense" in item: color = (100, 100, 255, 255) # Escudo azul
+        elif "food" in item: color = (255, 100, 100, 255) # Manzana roja
+        elif "market" in item: color = (255, 215, 0, 255) # Moneda oro
+        
+        # Fondo del icono
+        draw.ellipse([cx-size, cy-size, cx+size, cy+size], fill=(50,50,50,200), outline=(200,200,200,255))
+        
+        # Símbolo simple
+        if "defense" in item:
+            # Escudo
+            draw.polygon([(cx-8, cy-8), (cx+8, cy-8), (cx, cy+10)], fill=color)
+        elif "food" in item:
+            # Círculo
+            draw.ellipse([cx-6, cy-6, cx+6, cy+6], fill=color)
+        elif "market" in item:
+            # Moneda
+            draw.ellipse([cx-6, cy-6, cx+6, cy+6], fill=color, outline=(255,255,0,255))
+        else:
+            # Genérico (Cuadrado)
+            draw.rectangle([cx-6, cy-6, cx+6, cy+6], fill=color)
             
         return img
     
@@ -639,6 +905,12 @@ class ProceduralEngine:
                 
             elif category == "Props":
                 return self.generate_prop(biome, item, variation=idx)
+                
+            elif category == "Items":
+                return self.generate_item(biome, item, variation=idx)
+                
+            elif category == "UI_Icons":
+                return self.generate_icon(biome, item, variation=idx)
             
             return None
         

@@ -29,7 +29,8 @@ def main():
     SUPPORTED_CATEGORIES = [
         "Terrain", "Terrain_Transitions", "Paths", "Effects_Simple",
         "Vegetation", "Minerals_Natural",
-        "Structures", "Props"  # Nuevas categorías
+        "Structures", "Props",
+        "Items", "UI_Icons" # Todas las categorías
     ]
     
     print(f"🚀 Generando {args.count} variantes por asset...")
