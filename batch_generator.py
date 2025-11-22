@@ -13,7 +13,9 @@ from image_utils import (
     quantize_colors, 
     add_pixel_outline, 
     create_gif, 
-    validate_image
+    validate_image,
+    init_clip_qa,
+    evaluate_image_quality
 )
 from assets_config import BIOMES, ASSETS, PROMPT_TEMPLATES, BIOME_ADJECTIVES
 from PIL import Image
@@ -22,7 +24,7 @@ def ensure_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def process_and_save_image(image, save_path, apply_quantize=True, apply_outline=True):
+def process_and_save_image(image, save_path, apply_quantize=True, apply_outline=True, use_clip_qa=False, prompt=""):
     """Función worker para procesar y guardar imágenes en segundo plano."""
     try:
         # 0. QA Básico
@@ -30,10 +32,17 @@ def process_and_save_image(image, save_path, apply_quantize=True, apply_outline=
             print(f"Skipping invalid image: {save_path}")
             return
 
+        # 0.5. QA con IA (opcional)
+        if use_clip_qa:
+            qa_result = evaluate_image_quality(image, prompt)
+            if not qa_result['is_good']:
+                print(f"Skipping low quality image (score: {qa_result['score']:.1f}): {save_path}")
+                return
+
         # 1. Quitar fondo
         img_no_bg = remove_background(image)
         
-        # 2. Recorte automático
+        # 2. Recorte automático (mejorado)
         img_cropped = crop_to_content(img_no_bg)
         
         # 3. Cuantización de Color (Paleta)
@@ -59,12 +68,17 @@ def main():
     parser.add_argument("--style_strength", type=float, default=0.6, help="Fuerza del estilo IP-Adapter (0.0 a 1.0)")
     parser.add_argument("--no_quantize", action="store_true", help="Desactivar reducción de paleta")
     parser.add_argument("--no_outline", action="store_true", help="Desactivar borde negro")
+    parser.add_argument("--use_clip_qa", action="store_true", help="Activar QA con CLIP (lento pero preciso)")
     
     args = parser.parse_args()
     
     # Lógica inversa para flags negativos
     apply_quantize = not args.no_quantize
     apply_outline = not args.no_outline
+    
+    # Inicializar CLIP si se solicita
+    if args.use_clip_qa:
+        init_clip_qa()
     
     ensure_dir(args.output)
     
@@ -161,8 +175,10 @@ def main():
                             path = os.path.join(save_dir, f"frame_{i}_{safe_frame_name}.png")
                             img_cropped.save(path)
                             
-                            # Guardar metadatos del frame
-                            meta_path = os.path.join(save_dir, f"frame_{i}_{safe_frame_name}.json")
+                            # Guardar metadatos del frame en subcarpeta metadata/
+                            metadata_dir = os.path.join(save_dir, "metadata")
+                            ensure_dir(metadata_dir)
+                            meta_path = os.path.join(metadata_dir, f"frame_{i}_{safe_frame_name}.json")
                             with open(meta_path, 'w') as f:
                                 json.dump(frames_metadata[i], f, indent=2)
                         
@@ -203,8 +219,10 @@ def main():
                                 ip_adapter_scale=args.style_strength
                             )
                             
-                            # Guardar metadatos de esta variación
-                            meta_path = os.path.join(save_dir, f"{base_filename}_{variation_idx+1}_metadata.json")
+                            # Guardar metadatos de esta variación en subcarpeta metadata/
+                            metadata_dir = os.path.join(save_dir, "metadata")
+                            ensure_dir(metadata_dir)
+                            meta_path = os.path.join(metadata_dir, f"{base_filename}_{variation_idx+1}.json")
                             with open(meta_path, 'w') as f:
                                 json.dump(meta, f, indent=2)
                             

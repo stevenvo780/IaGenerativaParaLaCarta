@@ -168,6 +168,104 @@ def validate_image(image: Image.Image) -> bool:
         
     return True
 
+# ============================================================================
+# QA AVANZADO CON IA (CLIP en CPU)
+# ============================================================================
+_clip_model = None
+_clip_processor = None
+
+def init_clip_qa():
+    """
+    Inicializa CLIP para evaluación de calidad en CPU.
+    Solo se carga una vez (lazy loading).
+    """
+    global _clip_model, _clip_processor
+    
+    if _clip_model is not None:
+        return  # Ya inicializado
+    
+    try:
+        from transformers import CLIPProcessor, CLIPModel
+        print("Cargando CLIP para QA de imágenes (CPU)...")
+        
+        # Usar modelo pequeño para velocidad
+        model_id = "openai/clip-vit-base-patch32"
+        _clip_processor = CLIPProcessor.from_pretrained(model_id)
+        _clip_model = CLIPModel.from_pretrained(model_id)
+        _clip_model.eval()  # Modo evaluación
+        
+        print("CLIP cargado exitosamente.")
+    except Exception as e:
+        print(f"Error cargando CLIP: {e}")
+        print("QA con IA desactivado. Continuando con validación básica.")
+
+def evaluate_image_quality(image: Image.Image, prompt: str = "") -> dict:
+    """
+    Evalúa la calidad de una imagen usando CLIP.
+    
+    Retorna un diccionario con:
+    - 'score': Puntuación de 0-100 (qué tan bien coincide con el prompt)
+    - 'is_good': Boolean (True si score > 60)
+    - 'is_pixel_art': Boolean (qué tan "pixel art" se ve)
+    """
+    global _clip_model, _clip_processor
+    
+    # Si CLIP no está disponible, retornar valores por defecto
+    if _clip_model is None:
+        return {'score': 75.0, 'is_good': True, 'is_pixel_art': True}
+    
+    try:
+        # Preparar textos de comparación
+        positive_text = f"high quality pixel art {prompt}" if prompt else "high quality pixel art game asset"
+        negative_texts = [
+            "blurry low quality image",
+            "photorealistic 3d render",
+            "abstract noise",
+            "empty black image"
+        ]
+        
+        # Procesar imagen y textos
+        inputs = _clip_processor(
+            text=[positive_text] + negative_texts,
+            images=image,
+            return_tensors="pt",
+            padding=True
+        )
+        
+        # Inferencia
+        with torch.no_grad():
+            outputs = _clip_model(**inputs)
+            logits_per_image = outputs.logits_per_image
+            probs = logits_per_image.softmax(dim=1)
+        
+        # Probabilidad del texto positivo
+        positive_prob = probs[0][0].item()
+        score = positive_prob * 100
+        
+        # Verificar si es pixel art (vs foto/3D)
+        pixel_art_inputs = _clip_processor(
+            text=["pixel art game sprite", "photorealistic image"],
+            images=image,
+            return_tensors="pt",
+            padding=True
+        )
+        
+        with torch.no_grad():
+            pa_outputs = _clip_model(**pixel_art_inputs)
+            pa_probs = pa_outputs.logits_per_image.softmax(dim=1)
+        
+        is_pixel_art = pa_probs[0][0].item() > 0.6
+        
+        return {
+            'score': score,
+            'is_good': score > 60,
+            'is_pixel_art': is_pixel_art
+        }
+        
+    except Exception as e:
+        print(f"Error en evaluación CLIP: {e}")
+        return {'score': 75.0, 'is_good': True, 'is_pixel_art': True}
+
 def create_sprite_sheet(images: list[Image.Image], columns: int = 4) -> Image.Image:
     """Combina una lista de imágenes en un sprite sheet."""
     if not images:
@@ -195,11 +293,14 @@ def create_sprite_sheet(images: list[Image.Image], columns: int = 4) -> Image.Im
         
     return sprite_sheet
 
-def crop_to_content(image: Image.Image, padding: int = 2, alpha_threshold: int = 50) -> Image.Image:
+def crop_to_content(image: Image.Image, padding: int = 10, alpha_threshold: int = 10, min_crop_ratio: float = 0.3) -> Image.Image:
     """
-    Recorta la imagen al contenido visible.
-    - alpha_threshold: Valor mínimo de alpha (0-255) para considerar un pixel como 'visible'.
-      Ayuda a eliminar sombras tenues o 'fantasmas' dejados por rembg.
+    Recorta la imagen al contenido visible con mejoras para tiles y paths.
+    
+    - alpha_threshold: Reducido a 10 (antes 50) para preservar sombras y detalles sutiles.
+    - padding: Aumentado a 10px (antes 2) para dar más margen.
+    - min_crop_ratio: Si el recorte resultaría en menos del 30% del área original, 
+      probablemente es un tile/path que debe mantener su tamaño completo.
     """
     if image is None:
         return None
@@ -207,8 +308,8 @@ def crop_to_content(image: Image.Image, padding: int = 2, alpha_threshold: int =
     # Convertir a numpy para filtrado rápido
     img_np = np.array(image)
     
-    # Si no tiene canal alpha, añadirlo
-    if img_np.shape[2] == 3:
+    # Si no tiene canal alpha, retornar sin cambios
+    if len(img_np.shape) < 3 or img_np.shape[2] < 4:
         return image
         
     # Crear máscara de píxeles visibles (Alpha > umbral)
@@ -233,5 +334,20 @@ def crop_to_content(image: Image.Image, padding: int = 2, alpha_threshold: int =
     upper = max(0, ymin - padding)
     right = min(width, xmax + 1 + padding)
     lower = min(height, ymax + 1 + padding)
+    
+    # Calcular área del recorte vs área original
+    crop_width = right - left
+    crop_height = lower - upper
+    crop_area = crop_width * crop_height
+    original_area = width * height
+    crop_ratio = crop_area / original_area if original_area > 0 else 1.0
+    
+    # Si el recorte es muy pequeño comparado con el original,
+    # probablemente es un tile/path que debe mantener dimensiones completas
+    # (ej: un camino de 768x768 que tras recorte quedaría en 200x200)
+    if crop_ratio < min_crop_ratio:
+        # No recortar, solo centrar el contenido en el canvas original
+        # Esto es útil para tiles que necesitan ser cuadrados
+        return image
     
     return image.crop((left, upper, right, lower))
