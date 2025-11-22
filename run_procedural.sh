@@ -1,7 +1,7 @@
 #!/bin/bash
-# Script de Producción PROCEDURAL AVANZADO (V10.0)
+# Script de Producción PROCEDURAL AVANZADO (V11.1 - Estructura Recursiva Corregida)
 
-echo "🏭 Iniciando Producción 100% Procedural (V10.0)"
+echo "🏭 Iniciando Producción 100% Procedural (V11.1)"
 echo "==============================================="
 echo ""
 
@@ -11,60 +11,106 @@ cat <<EOF > run_procedural_batch.py
 import os
 import argparse
 from procedural_engine import ProceduralEngine
-from assets_config import ASSETS, BIOMES
 
-def ensure_dir(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
+# Mapeo de Biomas del Usuario -> Biomas del Motor
+BIOME_MAP = {
+    "beach": "Beach",
+    "desert": "Desert",
+    "forest": "Forest",
+    "grassland": "Grassland",
+    "mountain": "Mountain",
+    "swamp": "Swamp",
+    "tundra": "Snowy Tundra"
+}
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--count", type=int, default=10, help="Cantidad por asset")
+    parser.add_argument("--count", type=int, default=5, help="Cantidad por asset")
     parser.add_argument("--size", type=int, default=64, help="Tamaño de tile/sprite")
     args = parser.parse_args()
 
     engine = ProceduralEngine(tile_size=args.size)
+    base_path = "public/assets"
     
-    # Categorías soportadas por el motor procedural actual
-    SUPPORTED_CATEGORIES = [
-        "Terrain", "Terrain_Transitions", "Paths", "Effects_Simple",
-        "Vegetation", "Minerals_Natural",
-        "Structures", "Props",
-        "Items", "UI_Icons" # Todas las categorías
-    ]
+    print(f"🚀 Generando estructura RECURSIVA en '{base_path}'...")
     
-    print(f"🚀 Generando {args.count} variantes por asset...")
+    tasks = []
     
-    for biome in BIOMES:
-        print(f"\n🌍 Bioma: {biome}")
+    # --- 1. TILES ---
+    # Terrain (Por Bioma)
+    for user_biome, engine_biome in BIOME_MAP.items():
+        tasks.append({"path": f"tiles/terrain/{user_biome}", "cat": "Terrain", "item": "grass tile", "biome": engine_biome})
+    
+    # Water (Lake, Ocean, River) - Separados
+    # Nota: El motor usa 'water tile' genérico, pero variamos el bioma para el color
+    tasks.append({"path": "tiles/water/lake", "cat": "Terrain", "item": "water tile", "biome": "Forest"}) # Agua dulce
+    tasks.append({"path": "tiles/water/ocean", "cat": "Terrain", "item": "water tile", "biome": "Beach"}) # Agua salada
+    tasks.append({"path": "tiles/water/river", "cat": "Terrain", "item": "water tile", "biome": "Grassland"}) # Agua corriente
+
+    # --- 2. OBJECTS (Por Bioma) ---
+    for user_biome, engine_biome in BIOME_MAP.items():
+        # Trees
+        tasks.append({"path": f"objects/trees/{user_biome}", "cat": "Vegetation", "item": "tree", "biome": engine_biome})
+        # Plants
+        tasks.append({"path": f"objects/plants/{user_biome}", "cat": "Vegetation", "item": "bush", "biome": engine_biome})
+        # Props (Por Bioma)
+        tasks.append({"path": f"objects/props/{user_biome}", "cat": "Props", "item": "crate", "biome": engine_biome})
         
-        for category in SUPPORTED_CATEGORIES:
-            if category not in ASSETS: continue
+    # Rocks (General)
+    tasks.append({"path": "objects/rocks", "cat": "Minerals_Natural", "item": "rock", "biome": "Mountain"})
+
+    # --- 3. DECALS (Por Bioma) ---
+    # Usamos 'dirt_patch' o 'small rock' como decals
+    for user_biome, engine_biome in BIOME_MAP.items():
+        tasks.append({"path": f"decals/{user_biome}", "cat": "Effects_Simple", "item": "dirt_patch", "biome": engine_biome})
+
+    # --- 4. ENTITIES ---
+    # Animals
+    tasks.append({"path": "entities/animals", "cat": "Animals", "item": "pig", "biome": "Grassland"})
+    tasks.append({"path": "entities/animals", "cat": "Animals", "item": "cow", "biome": "Grassland"})
+    tasks.append({"path": "entities/animals", "cat": "Animals", "item": "chicken", "biome": "Forest"})
+    
+    # Characters
+    tasks.append({"path": "entities/characters", "cat": "Characters", "item": "villager", "biome": "Forest"})
+    
+    # --- 5. ITEMS & CONSUMABLES ---
+    tasks.append({"path": "items", "cat": "Items", "item": "sword", "biome": "Forest"})
+    tasks.append({"path": "items", "cat": "Items", "item": "shield", "biome": "Forest"})
+    tasks.append({"path": "consumable_items/food", "cat": "Items", "item": "apple", "biome": "Forest"})
+    tasks.append({"path": "consumable_items/food", "cat": "Items", "item": "bread", "biome": "Forest"})
+
+    # --- 6. STRUCTURES ---
+    tasks.append({"path": "structures/estructuras_completas", "cat": "Structures", "item": "house", "biome": "Forest"})
+    tasks.append({"path": "structures/ruins", "cat": "Structures", "item": "wall", "biome": "Ancient Ruins"})
+    tasks.append({"path": "structures/interiores", "cat": "Props", "item": "table", "biome": "Forest"}) # Muebles para interiores
+
+    # EJECUCIÓN
+    for task in tasks:
+        full_path = os.path.join(base_path, task["path"])
+        if not os.path.exists(full_path):
+            os.makedirs(full_path)
             
-            print(f"  📦 Categoría: {category}")
-            items = ASSETS[category]
-            
-            for item in items:
-                # Generar lote
-                images = engine.generate_batch(category, item, biome, count=args.count)
-                
-                # Guardar
-                save_dir = os.path.join("output_assets_procedural", biome, category)
-                ensure_dir(save_dir)
-                
-                for i, img in enumerate(images):
-                    filename = f"{item.replace(' ', '_')}_{i}.png"
-                    img.save(os.path.join(save_dir, filename))
-                
-                print(f"    ✅ {item}: {len(images)} generados")
+        print(f"  📂 {task['path']} ({task['biome']})...")
+        
+        images = engine.generate_batch(
+            task["cat"], 
+            task["item"], 
+            task["biome"], 
+            count=args.count
+        )
+        
+        for i, img in enumerate(images):
+            # Nombre único para evitar sobrescritura si hay varios items en la misma carpeta
+            filename = f"{task['item']}_{task['biome']}_{i}.png"
+            img.save(os.path.join(full_path, filename))
 
 if __name__ == "__main__":
     main()
 EOF
 
 # 2. Ejecutar
-echo "🚀 Ejecutando generador avanzado..."
+echo "🚀 Ejecutando generador estructurado..."
 python run_procedural_batch.py --count 5 --size 64
 
 echo ""
-echo "✅ Producción completada en 'output_assets_procedural/'"
+echo "✅ Producción completada en 'public/assets/'"

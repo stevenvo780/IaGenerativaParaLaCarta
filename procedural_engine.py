@@ -64,6 +64,22 @@ BIOME_PALETTES = {
         "grass": [(154, 205, 50), (107, 142, 35), (85, 107, 47), (124, 252, 0)],
         "water": [(70, 130, 180), (100, 149, 237), (65, 105, 225), (0, 191, 255)],
         "dirt": [(160, 160, 160), (169, 169, 169), (128, 128, 128), (192, 192, 192)]
+    },
+    # NUEVAS PALETAS SOLICITADAS
+    "Beach": {
+        "grass": [(238, 214, 175), (244, 164, 96), (210, 180, 140), (255, 228, 181)], # Arena
+        "water": [(0, 191, 255), (30, 144, 255), (0, 105, 148), (135, 206, 250)],
+        "dirt": [(139, 69, 19), (160, 82, 45), (205, 133, 63), (210, 105, 30)]
+    },
+    "Grassland": {
+        "grass": [(124, 252, 0), (50, 205, 50), (34, 139, 34), (173, 255, 47)],
+        "water": [(0, 191, 255), (135, 206, 235), (70, 130, 180), (176, 224, 230)],
+        "dirt": [(139, 69, 19), (160, 82, 45), (205, 133, 63), (222, 184, 135)]
+    },
+    "Mountain": {
+        "grass": [(112, 128, 144), (119, 136, 153), (105, 105, 105), (47, 79, 79)], # Roca/Piedra
+        "water": [(70, 130, 180), (100, 149, 237), (65, 105, 225), (176, 224, 230)],
+        "dirt": [(128, 128, 128), (169, 169, 169), (192, 192, 192), (211, 211, 211)]
     }
 }
 
@@ -575,12 +591,62 @@ class ProceduralEngine:
             draw.line([(x, y), (x+s, y+s)], fill=(0,0,0,100), width=2)
             draw.line([(x+s, y), (x, y+s)], fill=(0,0,0,100), width=2)
             
+        elif "window" in item_lower:
+            # Marco de ventana
+            w, h = 20, 24
+            x, y = cx - w//2, cy - h//2
+            # Marco exterior
+            draw.rectangle([x, y, x+w, y+h], fill=wood_dark+(255,), outline=(0,0,0,255))
+            # Cristal
+            draw.rectangle([x+2, y+2, x+w-2, y+h-2], fill=(135, 206, 235, 150))
+            # Cruz del marco
+            draw.line([(x+w//2, y), (x+w//2, y+h)], fill=wood_dark+(255,), width=2)
+            draw.line([(x, y+h//2), (x+w, y+h//2)], fill=wood_dark+(255,), width=2)
+            # Reflejo
+            draw.line([(x+4, y+4), (x+8, y+8)], fill=(255,255,255,100), width=1)
+            
+        elif "umbrella" in item_lower:
+            # Sombrilla de mercado
+            # Poste
+            draw.rectangle([cx-1, cy, cx+1, cy+28], fill=wood_dark+(255,), outline=(0,0,0,255))
+            # Tela (Triángulo/Arco)
+            colors = [(255, 0, 0), (255, 255, 255)] # Rayas rojas y blancas
+            radius = 20
+            for i in range(8):
+                angle_start = (i / 8) * 180 + 180 # Semicírculo superior
+                angle_end = ((i + 1) / 8) * 180 + 180
+                color = colors[i % 2]
+                draw.pieslice([cx-radius, cy-radius, cx+radius, cy+radius], angle_start, angle_end, fill=color+(255,), outline=(0,0,0,255))
+                
+        elif "clothesline" in item_lower:
+            # Tendedero
+            # Postes
+            draw.rectangle([cx-20, cy, cx-18, cy+20], fill=wood_dark+(255,), outline=(0,0,0,255))
+            draw.rectangle([cx+18, cy, cx+20, cy+20], fill=wood_dark+(255,), outline=(0,0,0,255))
+            # Cuerda
+            draw.line([(cx-18, cy+2), (cx+18, cy+5)], fill=(200,200,200,255), width=1)
+            # Ropa (Camisa simple)
+            draw.polygon([(cx-5, cy+5), (cx+5, cy+5), (cx+8, cy+15), (cx-8, cy+15)], fill=(200, 200, 255, 255), outline=(0,0,0,255))
+            
+        elif "bottle" in item_lower:
+            # Botella decorativa
+            w, h = 10, 16
+            x, y = cx - w//2, cy - h//2 + 5
+            # Cuerpo
+            draw.rectangle([x, y, x+w, y+h], fill=(100, 255, 100, 150), outline=(0,50,0,255))
+            # Cuello
+            draw.rectangle([x+2, y-4, x+w-2, y], fill=(100, 255, 100, 150), outline=(0,50,0,255))
+            # Corcho
+            draw.rectangle([x+3, y-6, x+w-3, y-4], fill=(139, 69, 19, 255))
+            # Reflejo
+            draw.line([(x+2, y+2), (x+2, y+h-2)], fill=(255,255,255,100))
+            
         else:
-            # Fallback genérico (Caja misteriosa)
-            s = 20
+            # Fallback MEJORADO: Objeto genérico pero útil (Caja pequeña)
+            s = 16
             x, y = cx - s//2, cy - s//2
-            draw.rectangle([x, y, x+s, y+s], fill=(100,100,100,255), outline=(0,0,0,255))
-            draw.text((x+5, y+2), "?", fill=(255,255,255,255))
+            draw.rectangle([x, y, x+s, y+s], fill=wood_light+(255,), outline=(0,0,0,255))
+            draw.rectangle([x+2, y+2, x+s-2, y+s-2], outline=(0,0,0,100))
             
         return img
 
@@ -670,6 +736,79 @@ class ProceduralEngine:
         else:
             # Genérico (Cuadrado)
             draw.rectangle([cx-6, cy-6, cx+6, cy+6], fill=color)
+            
+        return img
+
+    def generate_character(self, biome: str, item: str, variation: int = 0) -> Image.Image:
+        """Genera personajes usando Paper Doll (Capas)"""
+        random.seed(variation)
+        img = Image.new("RGBA", (self.tile_size, self.tile_size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        cx, cy = self.tile_size // 2, self.tile_size // 2
+        
+        # Colores de piel
+        skins = [(255, 224, 189), (255, 205, 148), (234, 192, 134), (255, 173, 96), (141, 85, 36)]
+        skin_color = skins[variation % len(skins)]
+        
+        # Colores de ropa (basados en bioma)
+        clothes_color = self.get_palette(biome, "grass")[0]
+        pants_color = self.get_palette(biome, "dirt")[0]
+        
+        # 1. Cuerpo Base
+        # Cabeza
+        draw.rectangle([cx-3, cy-10, cx+3, cy-4], fill=skin_color+(255,))
+        # Torso
+        draw.rectangle([cx-4, cy-4, cx+4, cy+4], fill=clothes_color+(255,))
+        # Brazos
+        draw.rectangle([cx-6, cy-4, cx-4, cy+2], fill=skin_color+(255,))
+        draw.rectangle([cx+4, cy-4, cx+6, cy+2], fill=skin_color+(255,))
+        # Piernas
+        draw.rectangle([cx-3, cy+4, cx-1, cy+12], fill=pants_color+(255,))
+        draw.rectangle([cx+1, cy+4, cx+3, cy+12], fill=pants_color+(255,))
+        
+        # 2. Detalles (Pelo, Ojos)
+        hair_colors = [(0,0,0), (139,69,19), (255,215,0), (169,169,169)]
+        hair_color = hair_colors[variation % len(hair_colors)]
+        
+        # Pelo
+        draw.rectangle([cx-4, cy-11, cx+4, cy-8], fill=hair_color+(255,)) # Top
+        draw.rectangle([cx-4, cy-11, cx-2, cy-6], fill=hair_color+(255,)) # Side L
+        draw.rectangle([cx+2, cy-11, cx+4, cy-6], fill=hair_color+(255,)) # Side R
+        
+        # Ojos
+        draw.point((cx-1, cy-7), fill=(0,0,0,255))
+        draw.point((cx+1, cy-7), fill=(0,0,0,255))
+        
+        return img
+
+    def generate_animal(self, biome: str, item: str, variation: int = 0) -> Image.Image:
+        """Genera animales (Siluetas simples)"""
+        random.seed(variation)
+        img = Image.new("RGBA", (self.tile_size, self.tile_size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        cx, cy = self.tile_size // 2, self.tile_size // 2
+        color = self.get_palette(biome, "dirt")[1]
+        
+        if "bird" in item.lower() or "chicken" in item.lower():
+            # Ave
+            draw.ellipse([cx-4, cy-4, cx+4, cy+4], fill=color+(255,)) # Cuerpo
+            draw.ellipse([cx+2, cy-6, cx+6, cy-2], fill=color+(255,)) # Cabeza
+            draw.polygon([(cx+6, cy-4), (cx+8, cy-3), (cx+6, cy-2)], fill=(255,165,0,255)) # Pico
+            draw.line([(cx, cy+4), (cx-2, cy+8)], fill=(0,0,0,255)) # Pata
+            draw.line([(cx, cy+4), (cx+2, cy+8)], fill=(0,0,0,255)) # Pata
+            
+        elif "cow" in item.lower() or "pig" in item.lower() or "sheep" in item.lower():
+            # Cuadrúpedo
+            if "pig" in item: color = (255, 192, 203)
+            elif "sheep" in item: color = (240, 240, 240)
+            
+            draw.rectangle([cx-8, cy-4, cx+8, cy+4], fill=color+(255,)) # Cuerpo
+            draw.rectangle([cx-10, cy-6, cx-6, cy], fill=color+(255,)) # Cabeza
+            # Patas
+            draw.rectangle([cx-8, cy+4, cx-6, cy+8], fill=color+(255,))
+            draw.rectangle([cx+6, cy+4, cx+8, cy+8], fill=color+(255,))
             
         return img
     
@@ -911,6 +1050,12 @@ class ProceduralEngine:
                 
             elif category == "UI_Icons":
                 return self.generate_icon(biome, item, variation=idx)
+                
+            elif category == "Characters":
+                return self.generate_character(biome, item, variation=idx)
+                
+            elif category == "Animals":
+                return self.generate_animal(biome, item, variation=idx)
             
             return None
         
