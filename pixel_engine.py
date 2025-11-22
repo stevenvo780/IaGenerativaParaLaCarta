@@ -36,11 +36,12 @@ class PixelArtGenerator:
         self.load_ip_adapter()
         
         # Optimización: Compilar UNet (Solo funciona bien en Linux + Ampere/Ada)
-        try:
-            print("Optimizando modelo con torch.compile()... (Esto puede tardar un poco la primera vez)")
-            self.pipe.unet = torch.compile(self.pipe.unet, mode="reduce-overhead", fullgraph=True)
-        except Exception as e:
-            print(f"Advertencia: No se pudo compilar el modelo: {e}")
+        # DESACTIVADO: Causa OOM en SDXL + LoRA + IP-Adapter con 16GB VRAM
+        # try:
+        #     print("Optimizando modelo con torch.compile()... (Esto puede tardar un poco la primera vez)")
+        #     self.pipe.unet = torch.compile(self.pipe.unet, mode="reduce-overhead", fullgraph=True)
+        # except Exception as e:
+        #     print(f"Advertencia: No se pudo compilar el modelo: {e}")
             
         print("Modelo SDXL + LoRA cargado exitosamente.")
 
