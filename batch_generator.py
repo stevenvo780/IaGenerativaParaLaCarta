@@ -35,38 +35,71 @@ def main():
             
             items = ASSETS[category]
             for item in items:
-                # Construir prompt
-                template = PROMPT_TEMPLATES.get(category, PROMPT_TEMPLATES["default"])
-                prompt = template.format(item=item, biome=biome)
+                print(f"[{current+1}/{total_tasks}] Procesando: {item} ({biome})...")
                 
-                print(f"[{current+1}/{total_tasks}] Generando: {item} ({biome})...")
-                
-                # Generar
-                images = generator.generate(
-                    prompt=prompt,
-                    num_inference_steps=30,
-                    guidance_scale=7.5,
-                    width=512,
-                    height=512,
-                    num_images=args.count
-                )
-                
-                # Procesar y Guardar
-                save_dir = os.path.join(args.output, biome, category)
-                ensure_dir(save_dir)
-                
-                for i, img in enumerate(images):
-                    # Post-procesado
-                    # 1. Pixelar (opcional, el modelo ya debería hacerlo, pero forzamos un poco)
-                    # img = pixelate(img, pixel_size=4) 
+                # Manejo especial para Personajes (Frame a Frame)
+                if category == "Characters":
+                    from assets_config import CHARACTER_FRAMES
+                    frames_images = []
                     
-                    # 2. Quitar fondo
-                    img_no_bg = remove_background(img)
+                    # Generar cada frame
+                    for frame_desc in CHARACTER_FRAMES:
+                        template = PROMPT_TEMPLATES.get("Characters")
+                        prompt = template.format(item=item, biome=biome, frame=frame_desc)
+                        
+                        print(f"  > Generando Frame: {frame_desc}")
+                        images = generator.generate(
+                            prompt=prompt,
+                            num_inference_steps=40, # Más pasos para calidad
+                            guidance_scale=6.5,     # Menor guidance para mejor estilo pixel art en SDXL
+                            width=1024,
+                            height=1024,
+                            num_images=1
+                        )
+                        frames_images.append(images[0])
                     
-                    # Guardar
-                    filename = f"{item.replace(' ', '_')}_{i+1}.png"
-                    filepath = os.path.join(save_dir, filename)
-                    img_no_bg.save(filepath)
+                    # Guardar frames individuales y sprite sheet
+                    save_dir = os.path.join(args.output, biome, category, item.replace(" ", "_"))
+                    ensure_dir(save_dir)
+                    
+                    processed_frames = []
+                    for i, (img, frame_name) in enumerate(zip(frames_images, CHARACTER_FRAMES)):
+                        # Post-procesado
+                        img_no_bg = remove_background(img)
+                        processed_frames.append(img_no_bg)
+                        
+                        # Guardar frame individual
+                        safe_frame_name = frame_name.replace(" ", "_").replace(",", "")
+                        img_no_bg.save(os.path.join(save_dir, f"frame_{i}_{safe_frame_name}.png"))
+                    
+                    # Crear Sprite Sheet (unir frames)
+                    # Usamos una función simple aquí o importamos de image_utils
+                    from image_utils import create_sprite_sheet
+                    sprite_sheet = create_sprite_sheet(processed_frames, columns=len(processed_frames))
+                    if sprite_sheet:
+                        sprite_sheet.save(os.path.join(save_dir, "sprite_sheet_full.png"))
+                        
+                else:
+                    # Lógica estándar para otros assets
+                    template = PROMPT_TEMPLATES.get(category, PROMPT_TEMPLATES["default"])
+                    prompt = template.format(item=item, biome=biome)
+                    
+                    images = generator.generate(
+                        prompt=prompt,
+                        num_inference_steps=40, # Aumentado para calidad
+                        guidance_scale=6.5,
+                        width=1024,
+                        height=1024,
+                        num_images=args.count
+                    )
+                    
+                    save_dir = os.path.join(args.output, biome, category)
+                    ensure_dir(save_dir)
+                    
+                    for i, img in enumerate(images):
+                        img_no_bg = remove_background(img)
+                        filename = f"{item.replace(' ', '_')}_{i+1}.png"
+                        img_no_bg.save(os.path.join(save_dir, filename))
                 
                 current += args.count
 

@@ -14,7 +14,7 @@ BIOMES = [
     "Ancient Ruins"
 ]
 
-# Mapeo de assets solicitados (Traducidos a Inglés para mejor prompting)
+# Mapeo de assets solicitados
 ASSETS = {
     "Terrain": [
         "grass tile", "water tile", "grass to water transition edge", "grass to water transition corner"
@@ -68,12 +68,27 @@ ASSETS = {
     ]
 }
 
-# Configuración de Prompts para SDXL
+# Definición de Frames para Animaciones
+CHARACTER_FRAMES = [
+    "idle pose, front view",
+    "walking pose, left leg forward, side view",
+    "walking pose, right leg forward, side view",
+    "attack pose, swinging weapon, dynamic action"
+]
+
+# Configuración de Prompts para SDXL (ESTRICTOS)
 PROMPT_TEMPLATES = {
-    "default": "pixel art, {item} in {biome}, isometric game asset, white background, clean lines, detailed, 8-bit style",
-    "Characters": "pixel art, sprite sheet of {item} in {biome}, character grid, walking animation frames, side view, white background, retro style",
-    "Terrain": "pixel art, top down tile of {item} in {biome}, seamless texture, flat view, game asset, rpg style",
-    "Paths": "pixel art, top down tile of {item} in {biome}, seamless texture, flat view, game asset, rpg style",
-    "UI_Icons": "pixel art, icon of {item}, UI element, vector style, flat, white background, simple, high contrast",
-    "Effects": "pixel art, {item} in {biome}, game effect, sprite sheet, white background"
+    # Default: Enfocado en objeto único y centrado
+    "default": "pixel art, single {item} in {biome} style, centered, isolated on white background, game asset, sharp focus, high contrast, 8-bit, no shadows, no background scenery",
+    
+    # Characters: Ahora usamos frames individuales
+    "Characters": "pixel art, single {item}, {frame}, {biome} style, centered, full body, isolated on white background, game sprite, retro style, clean lines",
+    
+    "Terrain": "pixel art, top down tile of {item} in {biome} style, seamless texture, flat view, game asset, rpg style, no perspective",
+    
+    "Paths": "pixel art, top down tile of {item} in {biome} style, seamless texture, flat view, game asset, rpg style, no perspective",
+    
+    "UI_Icons": "pixel art, icon of {item}, UI element, vector style, flat, white background, simple, high contrast, centered",
+    
+    "Effects": "pixel art, {item} in {biome} style, game effect, isolated, white background"
 }
