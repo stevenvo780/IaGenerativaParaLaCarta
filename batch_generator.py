@@ -1,9 +1,12 @@
-import os
 import argparse
+import os
+import torch
 import concurrent.futures
-from queue import Queue
+from PIL import Image
+import gc
+import json
 from pixel_engine import PixelArtGenerator
-from image_utils import remove_background, pixelate, crop_to_content
+from image_utils import remove_background, crop_to_content, create_sprite_sheet
 from assets_config import BIOMES, ASSETS, PROMPT_TEMPLATES, BIOME_ADJECTIVES
 from PIL import Image
 
@@ -27,16 +30,32 @@ def process_and_save_image(image, save_path):
 def main():
     parser = argparse.ArgumentParser(description="Generador Masivo de Pixel Art (Asíncrono)")
     parser.add_argument("--output", type=str, default="output_assets", help="Carpeta de salida")
-    parser.add_argument("--count", type=int, default=1, help="Variaciones por asset")
     parser.add_argument("--biome", type=str, default="all", help="Bioma específico o 'all'")
     parser.add_argument("--category", type=str, default="all", help="Categoría específica o 'all'")
+    parser.add_argument("--count", type=int, default=1, help="Número de variaciones por asset")
+    parser.add_argument("--style_strength", type=float, default=0.6, help="Fuerza del estilo IP-Adapter (0.0 a 1.0)")
     
     args = parser.parse_args()
+    
+    ensure_dir(args.output)
     
     # Inicializar generador
     generator = PixelArtGenerator()
     generator.load_model()
     
+    # Cargar imagen de referencia de estilo (si existe)
+    style_image = None
+    style_path = "style_reference.png"
+    if os.path.exists(style_path):
+        print(f"Imagen de referencia de estilo encontrada: {style_path}")
+        try:
+            style_image = Image.open(style_path).convert("RGB")
+            print(f"Estilo cargado. Fuerza: {args.style_strength}")
+        except Exception as e:
+            print(f"Error cargando imagen de estilo: {e}")
+    else:
+        print("No se encontró 'style_reference.png'. Generando sin clonación de estilo.")
+
     biomes_to_process = BIOMES if args.biome == "all" else [args.biome]
     categories_to_process = ASSETS.keys() if args.category == "all" else [args.category]
     
@@ -44,11 +63,16 @@ def main():
     print(f"Iniciando generación de {total_tasks} assets con Pipeline Asíncrono...")
     
     # ThreadPool para procesamiento en background (CPU bound tasks)
-    # Usamos max_workers=4 para no saturar la CPU si la generación es muy rápida, 
-    # aunque con SDXL la GPU es el cuello de botella principal, así que la CPU tendrá tiempo.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    # Aumentamos a 30 workers para aprovechar la CPU de 32 hilos del usuario
+    # Dejamos 2 hilos libres para el sistema y la gestión de la GPU
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
         current = 0
         for biome in biomes_to_process:
+            # LIMPIEZA DE MEMORIA ENTRE BIOMAS
+            gc.collect()
+            torch.cuda.empty_cache()
+            print(f"--- Iniciando Bioma: {biome} (Memoria Liberada) ---")
+            
             biome_adj = BIOME_ADJECTIVES.get(biome, "")
             
             for category in categories_to_process:
@@ -62,34 +86,31 @@ def main():
                     if category == "Characters":
                         from assets_config import CHARACTER_FRAMES
                         frames_images = []
+                        frames_metadata = []
                         
                         # Generar cada frame
                         for frame_desc in CHARACTER_FRAMES:
                             template = PROMPT_TEMPLATES.get("Characters")
-                            # No usamos adjetivo aquí porque el template de Characters es diferente, 
-                            # pero podríamos añadirlo si quisiéramos. Por ahora mantenemos simple.
                             prompt = template.format(item=item, biome=biome, frame=frame_desc)
                             
                             print(f"  > Generando Frame: {frame_desc}")
-                            images = generator.generate(
+                            # Desempaquetar tupla (imagenes, metadatos)
+                            images, meta = generator.generate(
                                 prompt=prompt,
                                 num_inference_steps=40,
                                 guidance_scale=6.5,
                                 width=1024,
                                 height=1024,
-                                num_images=1
+                                num_images=1,
+                                ip_adapter_image=style_image, # Inyectar estilo
+                                ip_adapter_scale=args.style_strength # Fuerza del estilo variable
                             )
                             frames_images.append(images[0])
+                            frames_metadata.append(meta)
                         
                         # Guardar frames individuales y sprite sheet
                         save_dir = os.path.join(args.output, biome, category, item.replace(" ", "_"))
                         ensure_dir(save_dir)
-                        
-                        # Procesar frames en paralelo? No, necesitamos orden para el sprite sheet.
-                        # Procesamos síncronamente o en grupo para este caso específico complejo.
-                        # Para simplificar, procesamos síncronamente la creación del sprite sheet 
-                        # pero el guardado de frames individuales podría ser async.
-                        # Dado que Characters son complejos, los hacemos en el hilo principal para evitar race conditions en la lista.
                         
                         processed_frames = []
                         for i, (img, frame_name) in enumerate(zip(frames_images, CHARACTER_FRAMES)):
@@ -100,6 +121,11 @@ def main():
                             safe_frame_name = frame_name.replace(" ", "_").replace(",", "")
                             path = os.path.join(save_dir, f"frame_{i}_{safe_frame_name}.png")
                             img_cropped.save(path)
+                            
+                            # Guardar metadatos del frame
+                            meta_path = os.path.join(save_dir, f"frame_{i}_{safe_frame_name}.json")
+                            with open(meta_path, 'w') as f:
+                                json.dump(frames_metadata[i], f, indent=2)
                         
                         from image_utils import create_sprite_sheet
                         sprite_sheet = create_sprite_sheet(processed_frames, columns=len(processed_frames))
@@ -107,30 +133,43 @@ def main():
                             sprite_sheet.save(os.path.join(save_dir, "sprite_sheet_full.png"))
                             
                     else:
-                        # Lógica estándar para otros assets (PIPELINE ASÍNCRONO)
+                        # Lógica estándar para otros assets (BATCHING REAL + ASYNC)
                         template = PROMPT_TEMPLATES.get(category, PROMPT_TEMPLATES["default"])
                         # Inyectar adjetivo
                         prompt = template.format(item=item, biome=biome, adjective=biome_adj)
                         
-                        images = generator.generate(
+                        # Generar TODAS las variaciones de una vez (Batching)
+                        # SDXL procesará esto mucho más rápido que 1 a 1
+                        print(f"  > Generando {args.count} variaciones en paralelo...")
+                        images, meta = generator.generate(
                             prompt=prompt,
                             num_inference_steps=40, 
                             guidance_scale=6.5,
                             width=1024,
                             height=1024,
-                            num_images=args.count
+                            num_images=args.count, # Batch size real
+                            ip_adapter_image=style_image, # Inyectar estilo
+                            ip_adapter_scale=args.style_strength # Fuerza del estilo variable
                         )
                         
                         save_dir = os.path.join(args.output, biome, category)
                         ensure_dir(save_dir)
                         
+                        # Guardar metadatos generales del batch
+                        base_filename = item.replace(' ', '_')
+                        batch_meta_path = os.path.join(save_dir, f"{base_filename}_metadata.json")
+                        with open(batch_meta_path, 'w') as f:
+                            json.dump(meta, f, indent=2)
+                        
                         for i, img in enumerate(images):
-                            filename = f"{item.replace(' ', '_')}_{i+1}.png"
+                            filename = f"{base_filename}_{i+1}.png"
                             save_path = os.path.join(save_dir, filename)
                             
                             # ENVIAR A WORKER (No bloquea el loop principal)
                             executor.submit(process_and_save_image, img, save_path)
                     
+                    # No sumamos args.count aquí porque el bucle 'current' es solo visual
+                    # pero si queremos mantener la barra de progreso precisa:
                     current += args.count
 
     print("Generación masiva completada. Esperando a que terminen los procesos de fondo...")

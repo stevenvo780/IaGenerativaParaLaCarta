@@ -9,3 +9,4 @@ numpy
 scipy
 onnxruntime-gpu
 peft
+huggingface_hub

@@ -32,6 +32,9 @@ class PixelArtGenerator:
         
         self.pipe.to(self.device)
         
+        # Cargar IP-Adapter (Clonación de Estilo)
+        self.load_ip_adapter()
+        
         # Optimización: Compilar UNet (Solo funciona bien en Linux + Ampere/Ada)
         try:
             print("Optimizando modelo con torch.compile()... (Esto puede tardar un poco la primera vez)")
@@ -42,31 +45,79 @@ class PixelArtGenerator:
         print("Modelo SDXL + LoRA cargado exitosamente.")
 
     def generate(
-        self, 
-        prompt: str, 
-        negative_prompt: str = "", 
-        num_inference_steps: int = 30, 
-        guidance_scale: float = 7.0, # SDXL suele usar valores menores que SD1.5
-        width: int = 1024, # Resolución nativa de SDXL
+        self,
+        prompt: str,
+        negative_prompt: str = "blurry, low quality, photo, realistic, 3d render, multiple objects, grid, collage, text, watermark, signature, cropped, out of frame",
+        num_inference_steps: int = 30,
+        guidance_scale: float = 7.5,
+        width: int = 1024,
         height: int = 1024,
-        num_images: int = 1
-    ) -> list[Image.Image]:
-        """Genera imágenes basadas en el prompt usando SDXL."""
+        num_images: int = 1,
+        seed: int = None,
+        ip_adapter_image = None, # Imagen de referencia para estilo
+        ip_adapter_scale: float = 0.6
+    ):
+        """
+        Genera imágenes basadas en el prompt.
+        Retorna: (lista_de_imagenes, metadatos_dict)
+        """
         if self.pipe is None:
-            self.load_model()
+            raise RuntimeError("El modelo no está cargado. Llama a load_model() primero.")
             
         # Trigger word del LoRA suele ser 'pixel art'
-        enhanced_prompt = f"pixel art, {prompt}, sharp, detailed, 8-bit, retro game asset"
-        enhanced_negative = f"blur, fuzzy, realistic, photo, 3d render, vector, smooth, {negative_prompt}"
+        prompt = f"pixel art, {prompt}, sharp, detailed, 8-bit, retro game asset"
+        negative_prompt = f"blur, fuzzy, realistic, photo, 3d render, vector, smooth, {negative_prompt}"
+
+        # Gestión de Seed para reproducibilidad
+        if seed is None:
+            seed = torch.randint(0, 2**32 - 1, (1,)).item()
+        generator = torch.Generator(device=self.device).manual_seed(seed)
+            
+        # Configurar IP-Adapter scale si se usa
+        if ip_adapter_image is not None:
+            if hasattr(self.pipe, "set_ip_adapter_scale"): # Check if method exists
+                self.pipe.set_ip_adapter_scale(ip_adapter_scale)
+            
+        kwargs = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "width": width,
+            "height": height,
+            "num_images_per_prompt": num_images,
+            "generator": generator,
+        }
         
-        images = self.pipe(
-            prompt=enhanced_prompt,
-            negative_prompt=enhanced_negative,
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
-            width=width,
-            height=height,
-            num_images_per_prompt=num_images
-        ).images
+        if ip_adapter_image is not None:
+            kwargs["ip_adapter_image"] = ip_adapter_image
+            
+        output = self.pipe(**kwargs)
         
-        return images
+        metadata = {
+            "prompt": prompt,
+            "seed": seed,
+            "steps": num_inference_steps,
+            "cfg": guidance_scale,
+            "width": width,
+            "height": height,
+            "model": "SDXL 1.0 + Pixel Art LoRA",
+            "ip_adapter_scale": ip_adapter_scale if ip_adapter_image else 0.0
+        }
+        
+        return output.images, metadata
+
+    def load_ip_adapter(self):
+        """Carga el IP-Adapter para SDXL."""
+        try:
+            print("Cargando IP-Adapter para SDXL...")
+            # Nota: Esto requiere descargar modelos adicionales (~1.2GB)
+            # Usamos el modelo oficial de IP-Adapter para SDXL
+            # ID correcto: h94/IP-Adapter
+            self.pipe.load_ip_adapter("h94/IP-Adapter", subfolder="sdxl_models", weight_name="ip-adapter_sdxl.bin")
+            # Nota: La implementación exacta depende de la librería diffusers instalada.
+            # En versiones recientes, load_ip_adapter descarga automáticamente.
+            print("IP-Adapter cargado.")
+        except Exception as e:
+            print(f"Error cargando IP-Adapter: {e}")
+            print("Continuando sin IP-Adapter.")

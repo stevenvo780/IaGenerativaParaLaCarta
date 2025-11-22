@@ -1,12 +1,36 @@
+import torch
+from rembg import remove, new_session
 from PIL import Image
-from rembg import remove
 import numpy as np
 
+# Configuración Multi-GPU para rembg
+# Intentamos usar la GPU secundaria (cuda:1) si está disponible.
+# CAMBIO: La GPU 1 (RTX 2060) está saturada (menos de 200MB libres).
+# Revertimos a CPU para garantizar estabilidad.
+providers = ['CPUExecutionProvider'] 
+
+# if torch.cuda.is_available():
+#     device_count = torch.cuda.device_count()
+#     if device_count > 1:
+#         providers = [
+#             ('CUDAExecutionProvider', {
+#                 'device_id': 1,
+#                 'arena_extend_strategy': 'kSameAsRequested',
+#             }),
+#             'CPUExecutionProvider',
+#         ]
+#         print(f"Configurando rembg (u2netp) en GPU Secundaria (device_id: 1)")
+#     else:
+#         print("Solo 1 GPU detectada. Usando CPU para rembg.")
+
+# Usamos 'u2netp' en lugar de 'u2net' por ser mucho más ligero y rápido
+session = new_session("u2netp", providers=providers)
+
 def remove_background(image: Image.Image) -> Image.Image:
-    """Elimina el fondo de una imagen usando rembg."""
+    """Elimina el fondo de una imagen usando rembg (GPU Secundaria o CPU)."""
     if image is None:
         return None
-    return remove(image)
+    return remove(image, session=session)
 
 def pixelate(image: Image.Image, pixel_size: int = 8) -> Image.Image:
     """
@@ -58,27 +82,43 @@ def create_sprite_sheet(images: list[Image.Image], columns: int = 4) -> Image.Im
         
     return sprite_sheet
 
-def crop_to_content(image: Image.Image, padding: int = 2) -> Image.Image:
+def crop_to_content(image: Image.Image, padding: int = 2, alpha_threshold: int = 50) -> Image.Image:
     """
-    Recorta la imagen al contenido visible (no transparente).
-    Añade un pequeño padding alrededor.
+    Recorta la imagen al contenido visible.
+    - alpha_threshold: Valor mínimo de alpha (0-255) para considerar un pixel como 'visible'.
+      Ayuda a eliminar sombras tenues o 'fantasmas' dejados por rembg.
     """
     if image is None:
         return None
     
-    # Obtener bounding box del contenido no cero (alpha > 0)
-    bbox = image.getbbox()
+    # Convertir a numpy para filtrado rápido
+    img_np = np.array(image)
     
-    if bbox:
-        # Añadir padding
-        left, upper, right, lower = bbox
-        width, height = image.size
+    # Si no tiene canal alpha, añadirlo
+    if img_np.shape[2] == 3:
+        return image
         
-        left = max(0, left - padding)
-        upper = max(0, upper - padding)
-        right = min(width, right + padding)
-        lower = min(height, lower + padding)
-        
-        return image.crop((left, upper, right, lower))
+    # Crear máscara de píxeles visibles (Alpha > umbral)
+    alpha_channel = img_np[:, :, 3]
+    mask = alpha_channel > alpha_threshold
     
-    return image # Si está vacía, devolver original
+    # Si la imagen está vacía tras el filtrado
+    if not np.any(mask):
+        return image
+        
+    # Encontrar bounding box de la máscara
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    
+    ymin, ymax = np.where(rows)[0][[0, -1]]
+    xmin, xmax = np.where(cols)[0][[0, -1]]
+    
+    # Añadir padding
+    width, height = image.size
+    
+    left = max(0, xmin - padding)
+    upper = max(0, ymin - padding)
+    right = min(width, xmax + 1 + padding)
+    lower = min(height, ymax + 1 + padding)
+    
+    return image.crop((left, upper, right, lower))
