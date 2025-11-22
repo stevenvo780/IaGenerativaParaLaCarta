@@ -76,23 +76,37 @@ CHARACTER_FRAMES = [
     "attack pose, swinging weapon, dynamic action"
 ]
 
-# Configuración de Prompts para SDXL (ESTILO ONÍRICO E HISTÓRICO)
+# Adjetivos por Bioma para mejorar coherencia (Fusión de Biomas)
+BIOME_ADJECTIVES = {
+    "Forest": "lush, mossy, wooden, natural",
+    "Desert": "sandy, dry, ancient, sun-bleached",
+    "Snowy Tundra": "frozen, icy, snow-covered, cold",
+    "Volcanic Wasteland": "charred, burning, obsidian, dark",
+    "Swamp": "slimy, muddy, rotten, vine-covered",
+    "Tropical Beach": "sandy, bright, tropical, sun-kissed",
+    "Crystal Cave": "crystalline, glowing, translucent, magical",
+    "Dense Jungle": "overgrown, vine-covered, exotic, vibrant",
+    "Ethereal Floating Islands": "celestial, floating, glowing, airy",
+    "Ancient Ruins": "cracked, broken, mossy stone, weathered"
+}
+
+# Configuración de Prompts para SDXL (ESTILO ONÍRICO E HISTÓRICO + FUSIÓN)
 PROMPT_TEMPLATES = {
     # Default: Enfocado en objeto único, estilo místico/histórico
-    "default": "pixel art, single {item} in {biome} style, centered, isolated on white background, oneiric, historical, dreamlike, ethereal, ancient, mystical, soft lighting, pastel colors, game asset, sharp focus, 8-bit, no shadows, no background scenery, no text, no ui",
+    "default": "pixel art, single {adjective} {item} in {biome} style, centered, isolated on white background, oneiric, historical, dreamlike, ethereal, ancient, mystical, soft lighting, pastel colors, game asset, sharp focus, 8-bit, no shadows, no background scenery, no text, no ui",
     
     # Characters: Estilo heroico/místico
     "Characters": "pixel art, single {item}, {frame}, {biome} style, centered, full body, isolated on white background, historical fantasy, dreamlike, detailed armor/clothing, game sprite, retro style, clean lines, no background",
     
     # Terrain: Texturas antiguas
-    "Terrain": "pixel art, top down tile of {item} in {biome} style, seamless texture, flat view, ancient ruins aesthetic, dreamlike colors, game asset, rpg style, no perspective",
+    "Terrain": "pixel art, top down tile of {adjective} {item} in {biome} style, seamless texture, flat view, ancient ruins aesthetic, dreamlike colors, game asset, rpg style, no perspective",
     
     # Paths: Caminos viejos
-    "Paths": "pixel art, top down tile of {item} in {biome} style, seamless texture, flat view, worn ancient path, historical, game asset, rpg style, no perspective",
+    "Paths": "pixel art, top down tile of {adjective} {item} in {biome} style, seamless texture, flat view, worn ancient path, historical, game asset, rpg style, no perspective",
     
     # UI_Icons: Estilo manuscrito/runas
     "UI_Icons": "pixel art, icon of {item}, UI element, ancient manuscript style, rune aesthetic, flat, white background, simple, high contrast, centered",
     
     # Effects: Magia etérea
-    "Effects": "pixel art, {item} in {biome} style, game effect, ethereal magic, dreamlike, isolated, white background"
+    "Effects": "pixel art, {adjective} {item} in {biome} style, game effect, ethereal magic, dreamlike, isolated, white background"
 }

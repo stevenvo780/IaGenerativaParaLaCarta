@@ -31,6 +31,14 @@ class PixelArtGenerator:
         self.pipe.fuse_lora() # Fusionar para mejor rendimiento
         
         self.pipe.to(self.device)
+        
+        # Optimización: Compilar UNet (Solo funciona bien en Linux + Ampere/Ada)
+        try:
+            print("Optimizando modelo con torch.compile()... (Esto puede tardar un poco la primera vez)")
+            self.pipe.unet = torch.compile(self.pipe.unet, mode="reduce-overhead", fullgraph=True)
+        except Exception as e:
+            print(f"Advertencia: No se pudo compilar el modelo: {e}")
+            
         print("Modelo SDXL + LoRA cargado exitosamente.")
 
     def generate(
