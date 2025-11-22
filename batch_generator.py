@@ -1,7 +1,7 @@
 import os
 import argparse
 from pixel_engine import PixelArtGenerator
-from image_utils import remove_background, pixelate
+from image_utils import remove_background, pixelate, crop_to_content
 from assets_config import BIOMES, ASSETS, PROMPT_TEMPLATES
 from PIL import Image
 
@@ -66,11 +66,13 @@ def main():
                     for i, (img, frame_name) in enumerate(zip(frames_images, CHARACTER_FRAMES)):
                         # Post-procesado
                         img_no_bg = remove_background(img)
-                        processed_frames.append(img_no_bg)
+                        # Recorte automático
+                        img_cropped = crop_to_content(img_no_bg)
+                        processed_frames.append(img_cropped)
                         
                         # Guardar frame individual
                         safe_frame_name = frame_name.replace(" ", "_").replace(",", "")
-                        img_no_bg.save(os.path.join(save_dir, f"frame_{i}_{safe_frame_name}.png"))
+                        img_cropped.save(os.path.join(save_dir, f"frame_{i}_{safe_frame_name}.png"))
                     
                     # Crear Sprite Sheet (unir frames)
                     # Usamos una función simple aquí o importamos de image_utils
@@ -98,8 +100,11 @@ def main():
                     
                     for i, img in enumerate(images):
                         img_no_bg = remove_background(img)
+                        # Recorte automático
+                        img_cropped = crop_to_content(img_no_bg)
+                        
                         filename = f"{item.replace(' ', '_')}_{i+1}.png"
-                        img_no_bg.save(os.path.join(save_dir, filename))
+                        img_cropped.save(os.path.join(save_dir, filename))
                 
                 current += args.count
 

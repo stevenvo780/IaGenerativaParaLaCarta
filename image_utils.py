@@ -57,3 +57,28 @@ def create_sprite_sheet(images: list[Image.Image], columns: int = 4) -> Image.Im
         sprite_sheet.paste(img, (x, y))
         
     return sprite_sheet
+
+def crop_to_content(image: Image.Image, padding: int = 2) -> Image.Image:
+    """
+    Recorta la imagen al contenido visible (no transparente).
+    Añade un pequeño padding alrededor.
+    """
+    if image is None:
+        return None
+    
+    # Obtener bounding box del contenido no cero (alpha > 0)
+    bbox = image.getbbox()
+    
+    if bbox:
+        # Añadir padding
+        left, upper, right, lower = bbox
+        width, height = image.size
+        
+        left = max(0, left - padding)
+        upper = max(0, upper - padding)
+        right = min(width, right + padding)
+        lower = min(height, lower + padding)
+        
+        return image.crop((left, upper, right, lower))
+    
+    return image # Si está vacía, devolver original

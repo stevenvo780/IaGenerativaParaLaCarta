@@ -76,19 +76,23 @@ CHARACTER_FRAMES = [
     "attack pose, swinging weapon, dynamic action"
 ]
 
-# Configuración de Prompts para SDXL (ESTRICTOS)
+# Configuración de Prompts para SDXL (ESTILO ONÍRICO E HISTÓRICO)
 PROMPT_TEMPLATES = {
-    # Default: Enfocado en objeto único y centrado
-    "default": "pixel art, single {item} in {biome} style, centered, isolated on white background, game asset, sharp focus, high contrast, 8-bit, no shadows, no background scenery",
+    # Default: Enfocado en objeto único, estilo místico/histórico
+    "default": "pixel art, single {item} in {biome} style, centered, isolated on white background, oneiric, historical, dreamlike, ethereal, ancient, mystical, soft lighting, pastel colors, game asset, sharp focus, 8-bit, no shadows, no background scenery, no text, no ui",
     
-    # Characters: Ahora usamos frames individuales
-    "Characters": "pixel art, single {item}, {frame}, {biome} style, centered, full body, isolated on white background, game sprite, retro style, clean lines",
+    # Characters: Estilo heroico/místico
+    "Characters": "pixel art, single {item}, {frame}, {biome} style, centered, full body, isolated on white background, historical fantasy, dreamlike, detailed armor/clothing, game sprite, retro style, clean lines, no background",
     
-    "Terrain": "pixel art, top down tile of {item} in {biome} style, seamless texture, flat view, game asset, rpg style, no perspective",
+    # Terrain: Texturas antiguas
+    "Terrain": "pixel art, top down tile of {item} in {biome} style, seamless texture, flat view, ancient ruins aesthetic, dreamlike colors, game asset, rpg style, no perspective",
     
-    "Paths": "pixel art, top down tile of {item} in {biome} style, seamless texture, flat view, game asset, rpg style, no perspective",
+    # Paths: Caminos viejos
+    "Paths": "pixel art, top down tile of {item} in {biome} style, seamless texture, flat view, worn ancient path, historical, game asset, rpg style, no perspective",
     
-    "UI_Icons": "pixel art, icon of {item}, UI element, vector style, flat, white background, simple, high contrast, centered",
+    # UI_Icons: Estilo manuscrito/runas
+    "UI_Icons": "pixel art, icon of {item}, UI element, ancient manuscript style, rune aesthetic, flat, white background, simple, high contrast, centered",
     
-    "Effects": "pixel art, {item} in {biome} style, game effect, isolated, white background"
+    # Effects: Magia etérea
+    "Effects": "pixel art, {item} in {biome} style, game effect, ethereal magic, dreamlike, isolated, white background"
 }
