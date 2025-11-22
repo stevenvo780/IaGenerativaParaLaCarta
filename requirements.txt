@@ -1,0 +1,11 @@
+torch
+diffusers
+transformers
+accelerate
+rembg
+gradio
+Pillow
+numpy
+scipy
+onnxruntime-gpu
+peft
