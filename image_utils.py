@@ -293,13 +293,13 @@ def create_sprite_sheet(images: list[Image.Image], columns: int = 4) -> Image.Im
         
     return sprite_sheet
 
-def crop_to_content(image: Image.Image, padding: int = 10, alpha_threshold: int = 10, min_crop_ratio: float = 0.3) -> Image.Image:
+def crop_to_content(image: Image.Image, padding: int = 10, alpha_threshold: int = 10, min_crop_ratio: float = 0.5) -> Image.Image:
     """
     Recorta la imagen al contenido visible con mejoras para tiles y paths.
     
     - alpha_threshold: Reducido a 10 (antes 50) para preservar sombras y detalles sutiles.
     - padding: Aumentado a 10px (antes 2) para dar más margen.
-    - min_crop_ratio: Si el recorte resultaría en menos del 30% del área original, 
+    - min_crop_ratio: Si el recorte resultaría en menos del 50% del área original, 
       probablemente es un tile/path que debe mantener su tamaño completo.
     """
     if image is None:

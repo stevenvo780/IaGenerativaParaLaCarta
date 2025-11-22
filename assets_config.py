@@ -92,23 +92,23 @@ BIOME_ADJECTIVES = {
     "Ancient Ruins": "cracked, broken, mossy stone, weathered"
 }
 
-# Configuración de Prompts para SDXL (ESTILO ONÍRICO E HISTÓRICO + FUSIÓN)
+# Configuración de Prompts para SDXL (CALIDAD MÁXIMA)
 PROMPT_TEMPLATES = {
-    # Default: Enfocado en objeto único, estilo místico/histórico
-    "default": "pixel art, single {adjective} {item} in {biome} style, centered, isolated on white background, oneiric, historical, dreamlike, ethereal, ancient, mystical, soft lighting, pastel colors, game asset, sharp focus, 8-bit, no shadows, no background scenery, no text, no ui",
+    # Default: Enfocado en objeto único, máxima calidad pixel art
+    "default": "masterpiece, best quality, pixel art, single {adjective} {item} in {biome} style, centered, isolated on white background, sharp pixels, clean lines, vibrant colors, professional game asset, 16-bit style, no shadows, no background scenery, no text, no ui, highly detailed",
     
-    # Characters: Estilo heroico/místico
-    "Characters": "pixel art, single {item}, {frame}, {biome} style, centered, full body, isolated on white background, historical fantasy, dreamlike, detailed armor/clothing, game sprite, retro style, clean lines, no background",
+    # Characters: Estilo heroico/místico de alta calidad
+    "Characters": "masterpiece, best quality, pixel art, single {item}, {frame}, {biome} style, centered, full body, isolated on white background, sharp pixels, detailed sprite, professional character design, clean lines, vibrant colors, rpg style, no background, highly detailed",
     
-    # Terrain: Texturas antiguas
-    "Terrain": "pixel art, top down tile of {adjective} {item} in {biome} style, seamless texture, flat view, ancient ruins aesthetic, dreamlike colors, game asset, rpg style, no perspective",
+    # Terrain: Texturas de alta calidad
+    "Terrain": "masterpiece, best quality, pixel art, top down tile of {adjective} {item} in {biome} style, seamless texture, flat view, sharp pixels, clean tileable pattern, vibrant colors, professional game asset, 16-bit rpg style, no perspective, highly detailed",
     
-    # Paths: Caminos viejos
-    "Paths": "pixel art, top down tile of {adjective} {item} in {biome} style, seamless texture, flat view, worn ancient path, historical, game asset, rpg style, no perspective",
+    # Paths: Caminos detallados
+    "Paths": "masterpiece, best quality, pixel art, top down tile of {adjective} {item} in {biome} style, seamless texture, flat view, sharp pixels, clean path pattern, vibrant colors, professional game asset, 16-bit rpg style, no perspective, highly detailed",
     
-    # UI_Icons: Estilo manuscrito/runas
-    "UI_Icons": "pixel art, icon of {item}, UI element, ancient manuscript style, rune aesthetic, flat, white background, simple, high contrast, centered",
+    # UI_Icons: Iconos nítidos
+    "UI_Icons": "masterpiece, best quality, pixel art, icon of {item}, UI element, sharp pixels, clean design, high contrast, vibrant colors, centered, white background, simple, professional game ui, 16-bit style, highly detailed",
     
-    # Effects: Magia etérea
-    "Effects": "pixel art, {adjective} {item} in {biome} style, game effect, ethereal magic, dreamlike, isolated, white background"
+    # Effects: Efectos de alta calidad
+    "Effects": "masterpiece, best quality, pixel art, {adjective} {item} in {biome} style, game effect, sharp pixels, vibrant colors, clean design, isolated, white background, professional vfx, highly detailed"
 }

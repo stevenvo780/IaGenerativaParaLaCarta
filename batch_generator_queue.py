@@ -112,8 +112,8 @@ def main():
     parser.add_argument("--style_strength", type=float, default=0.6, help="Fuerza del estilo IP-Adapter")
     parser.add_argument("--no_quantize", action="store_true", help="Desactivar paleta")
     parser.add_argument("--no_outline", action="store_true", help="Desactivar outline")
-    parser.add_argument("--min_clip_score", type=float, default=65.0, help="Score mínimo CLIP (0-100)")
-    parser.add_argument("--min_aesthetic", type=float, default=5.0, help="Score mínimo estético (0-10)")
+    parser.add_argument("--min_clip_score", type=float, default=70.0, help="Score mínimo CLIP (0-100)")
+    parser.add_argument("--min_aesthetic", type=float, default=6.0, help="Score mínimo estético (0-10)")
     parser.add_argument("--max_retries", type=int, default=3, help="Máximo de reintentos por imagen")
     parser.add_argument("--cpu_workers", type=int, default=30, help="Workers CPU para evaluación")
     
@@ -184,75 +184,152 @@ def main():
             for item in items:
                 print(f"\n📦 {item} ({biome})")
                 
-                # Generar variaciones
-                for var_idx in range(args.count):
-                    task_id = f"{biome}_{category}_{item}_{var_idx}"
-                    
-                    # Inicializar tracking
-                    pending_tasks[task_id] = {
-                        'retry_count': 0,
-                        'biome': biome,
-                        'category': category,
-                        'item': item,
-                        'var_idx': var_idx
-                    }
-                    
-                    # Generar imagen
-                    template = PROMPT_TEMPLATES.get(category, PROMPT_TEMPLATES["default"])
-                    prompt = template.format(item=item, biome=biome, adjective=biome_adj)
-                    
-                    print(f"  🎨 Generando variación {var_idx+1}/{args.count}...")
-                    
-                    images, meta = generator.generate(
-                        prompt=prompt,
-                        num_inference_steps=40,
-                        guidance_scale=6.5,
-                        width=768,
-                        height=768,
-                        num_images=1,
-                        ip_adapter_image=style_image,
-                        ip_adapter_scale=args.style_strength
-                    )
-                    
-                    total_generated.value += 1
-                    
-                    # Preparar tarea para evaluación
-                    save_dir = os.path.join(args.output, biome, category)
-                    ensure_dir(save_dir)
-                    filename = f"{item.replace(' ', '_')}_{var_idx+1}.png"
-                    save_path = os.path.join(save_dir, filename)
-                    
-                    task = {
-                        'task_id': task_id,
-                        'image': images[0],
-                        'save_path': save_path,
-                        'prompt': prompt,
-                        'metadata': meta
-                    }
-                    
-                    # Encolar para evaluación
-                    task_queue.put(task)
-                    
-                    # Procesar resultados mientras generamos
-                    while not results_queue.empty():
-                        result = results_queue.get_nowait()
-                        result_task_id = result['task_id']
+                # Manejo especial para Characters (con frames de animación)
+                if category == "Characters":
+                    # Generar cada frame del personaje
+                    for frame_idx, frame_desc in enumerate(CHARACTER_FRAMES):
+                        task_id = f"{biome}_{category}_{item}_frame{frame_idx}"
                         
-                        if result['status'] == 'success':
-                            completed_count.value += 1
-                            del pending_tasks[result_task_id]
+                        pending_tasks[task_id] = {
+                            'retry_count': 0,
+                            'biome': biome,
+                            'category': category,
+                            'item': item,
+                            'frame_idx': frame_idx
+                        }
+                        
+                        # Generar imagen del frame
+                        template = PROMPT_TEMPLATES.get("Characters")
+                        prompt = template.format(item=item, biome=biome, frame=frame_desc)
+                        
+                        print(f"  🎨 Generando frame {frame_idx+1}/{len(CHARACTER_FRAMES)}: {frame_desc[:30]}...")
+                        
+                        images, meta = generator.generate(
+                            prompt=prompt,
+                            num_inference_steps=40,
+                            guidance_scale=6.5,
+                            width=768,
+                            height=768,
+                            num_images=1,
+                            ip_adapter_image=style_image,
+                            ip_adapter_scale=args.style_strength
+                        )
+                        
+                        total_generated.value += 1
+                        
+                        # Preparar tarea para evaluación
+                        save_dir = os.path.join(args.output, biome, category, item.replace(" ", "_"))
+                        ensure_dir(save_dir)
+                        safe_frame_name = frame_desc.replace(" ", "_").replace(",", "")
+                        filename = f"frame_{frame_idx}_{safe_frame_name}.png"
+                        save_path = os.path.join(save_dir, filename)
+                        
+                        task = {
+                            'task_id': task_id,
+                            'image': images[0],
+                            'save_path': save_path,
+                            'prompt': prompt,
+                            'metadata': meta
+                        }
+                        
+                        # Encolar para evaluación
+                        task_queue.put(task)
+                        
+                        # Procesar resultados mientras generamos
+                        while not results_queue.empty():
+                            result = results_queue.get_nowait()
+                            result_task_id = result['task_id']
                             
-                        elif result['status'] == 'retry':
-                            task_info = pending_tasks[result_task_id]
-                            task_info['retry_count'] += 1
+                            if result['status'] == 'success':
+                                completed_count.value += 1
+                                if result_task_id in pending_tasks:
+                                    del pending_tasks[result_task_id]
+                                
+                            elif result['status'] == 'retry':
+                                task_info = pending_tasks.get(result_task_id)
+                                if task_info:
+                                    task_info['retry_count'] += 1
+                                    
+                                    if task_info['retry_count'] < args.max_retries:
+                                        print(f"  🔄 Retry {task_info['retry_count']}/{args.max_retries}: {result_task_id}")
+                                        # TODO: Re-generar
+                                    else:
+                                        print(f"  ⚠️  Max retries alcanzado: {result_task_id}")
+                                        del pending_tasks[result_task_id]
+                    
+                    # TODO: Generar sprite sheet y GIF para el personaje
+                    
+                else:
+                    # Generar variaciones para otros assets
+                    for var_idx in range(args.count):
+                        task_id = f"{biome}_{category}_{item}_{var_idx}"
+                        
+                        # Inicializar tracking
+                        pending_tasks[task_id] = {
+                            'retry_count': 0,
+                            'biome': biome,
+                            'category': category,
+                            'item': item,
+                            'var_idx': var_idx
+                        }
+                        
+                        # Generar imagen
+                        template = PROMPT_TEMPLATES.get(category, PROMPT_TEMPLATES["default"])
+                        prompt = template.format(item=item, biome=biome, adjective=biome_adj)
+                        
+                        print(f"  🎨 Generando variación {var_idx+1}/{args.count}...")
+                        
+                        images, meta = generator.generate(
+                            prompt=prompt,
+                            num_inference_steps=40,
+                            guidance_scale=6.5,
+                            width=768,
+                            height=768,
+                            num_images=1,
+                            ip_adapter_image=style_image,
+                            ip_adapter_scale=args.style_strength
+                        )
+                        
+                        total_generated.value += 1
+                        
+                        # Preparar tarea para evaluación
+                        save_dir = os.path.join(args.output, biome, category)
+                        ensure_dir(save_dir)
+                        filename = f"{item.replace(' ', '_')}_{var_idx+1}.png"
+                        save_path = os.path.join(save_dir, filename)
+                        
+                        task = {
+                            'task_id': task_id,
+                            'image': images[0],
+                            'save_path': save_path,
+                            'prompt': prompt,
+                            'metadata': meta
+                        }
+                        
+                        # Encolar para evaluación
+                        task_queue.put(task)
+                        
+                        # Procesar resultados mientras generamos
+                        while not results_queue.empty():
+                            result = results_queue.get_nowait()
+                            result_task_id = result['task_id']
                             
-                            if task_info['retry_count'] < args.max_retries:
-                                print(f"  🔄 Retry {task_info['retry_count']}/{args.max_retries}: {result_task_id}")
-                                # Re-generar
-                                # (Aquí simplificado, en producción guardaríamos el task completo)
-                            else:
-                                print(f"  ⚠️  Max retries alcanzado: {result_task_id}")
-                                del pending_tasks[result_task_id]
+                            if result['status'] == 'success':
+                                completed_count.value += 1
+                                if result_task_id in pending_tasks:
+                                    del pending_tasks[result_task_id]
+                                
+                            elif result['status'] == 'retry':
+                                task_info = pending_tasks.get(result_task_id)
+                                if task_info:
+                                    task_info['retry_count'] += 1
+                                    
+                                    if task_info['retry_count'] < args.max_retries:
+                                        print(f"  🔄 Retry {task_info['retry_count']}/{args.max_retries}: {result_task_id}")
+                                        # TODO: Re-generar
+                                    else:
+                                        print(f"  ⚠️  Max retries alcanzado: {result_task_id}")
+                                        del pending_tasks[result_task_id]
                 
                 # Limpiar memoria cada item
                 if total_generated.value % 10 == 0:
