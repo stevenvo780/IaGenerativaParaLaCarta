@@ -30,7 +30,14 @@ class PixelArtGenerator:
         self.pipe.load_lora_weights(self.lora_id)
         self.pipe.fuse_lora() # Fusionar para mejor rendimiento
         
+        # Revertido a .to(device) por problemas de tipos con Offload
         self.pipe.to(self.device)
+        
+        # OPTIMIZACIÓN DE MEMORIA CRÍTICA:
+        # En lugar de mover todo a GPU (.to("cuda")), usamos CPU Offload.
+        # Esto mantiene solo los componentes activos en VRAM.
+        # Esencial para SDXL + IP-Adapter en 16GB VRAM.
+        # self.pipe.enable_model_cpu_offload()
         
         # Cargar IP-Adapter (Clonación de Estilo)
         self.load_ip_adapter()
@@ -51,8 +58,8 @@ class PixelArtGenerator:
         negative_prompt: str = "blurry, low quality, photo, realistic, 3d render, multiple objects, grid, collage, text, watermark, signature, cropped, out of frame",
         num_inference_steps: int = 30,
         guidance_scale: float = 7.5,
-        width: int = 1024,
-        height: int = 1024,
+        width: int = 768, # Reducido de 1024 para evitar OOM con IP-Adapter
+        height: int = 768, # Reducido de 1024 para evitar OOM con IP-Adapter
         num_images: int = 1,
         seed: int = None,
         ip_adapter_image = None, # Imagen de referencia para estilo
@@ -72,7 +79,11 @@ class PixelArtGenerator:
         # Gestión de Seed para reproducibilidad
         if seed is None:
             seed = torch.randint(0, 2**32 - 1, (1,)).item()
-        generator = torch.Generator(device=self.device).manual_seed(seed)
+        
+        # Con CPU Offload, es mejor usar un generador en CPU para evitar conflictos de dispositivo
+        # o dejar que diffusers maneje el dispositivo si pasamos un int.
+        # Pero para reproducibilidad exacta, usamos CPU generator.
+        generator = torch.Generator(device="cpu").manual_seed(seed)
             
         # Configurar IP-Adapter scale si se usa
         if ip_adapter_image is not None:

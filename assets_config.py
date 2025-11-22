@@ -15,6 +15,7 @@ BIOMES = [
 ]
 
 # Mapeo de assets solicitados
+# Mapeo de assets solicitados (Lista Completa Expandida)
 ASSETS = {
     "Terrain": [
         "grass tile", "water tile", "grass to water transition edge", "grass to water transition corner"
@@ -39,7 +40,8 @@ ASSETS = {
         "wooden barrel", "treasure chest", "wooden crate", "market stall umbrella", "clothesline with clothes", "glass bottle"
     ],
     "Characters": [
-        "male warrior", "female mage", "male villager", "female villager"
+        "male warrior", "female mage", "male villager", "female villager",
+        "male warrior dark skin", "female mage dark skin", "male villager blue clothes", "female villager red clothes"
     ],
     "Character_Accessories": [
         "golden crown", "headband", "scar overlay", "iron armor chestplate", "hero cape", 

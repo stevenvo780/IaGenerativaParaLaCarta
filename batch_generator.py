@@ -99,8 +99,8 @@ def main():
                                 prompt=prompt,
                                 num_inference_steps=40,
                                 guidance_scale=6.5,
-                                width=1024,
-                                height=1024,
+                                width=768, # Reducido para estabilidad
+                                height=768, # Reducido para estabilidad
                                 num_images=1,
                                 ip_adapter_image=style_image, # Inyectar estilo
                                 ip_adapter_scale=args.style_strength # Fuerza del estilo variable
@@ -145,8 +145,8 @@ def main():
                             prompt=prompt,
                             num_inference_steps=40, 
                             guidance_scale=6.5,
-                            width=1024,
-                            height=1024,
+                            width=768, # Reducido para estabilidad
+                            height=768, # Reducido para estabilidad
                             num_images=args.count, # Batch size real
                             ip_adapter_image=style_image, # Inyectar estilo
                             ip_adapter_scale=args.style_strength # Fuerza del estilo variable
