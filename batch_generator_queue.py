@@ -206,8 +206,8 @@ def main():
                         
                         images, meta = generator.generate(
                             prompt=prompt,
-                            num_inference_steps=40,
-                            guidance_scale=6.5,
+                            num_inference_steps=50,  # Aumentado para mejor calidad
+                            guidance_scale=7.5,      # Más fiel al prompt
                             width=768,
                             height=768,
                             num_images=1,
@@ -281,8 +281,8 @@ def main():
                         
                         images, meta = generator.generate(
                             prompt=prompt,
-                            num_inference_steps=40,
-                            guidance_scale=6.5,
+                            num_inference_steps=50,  # Aumentado para mejor calidad
+                            guidance_scale=7.5,      # Más fiel al prompt
                             width=768,
                             height=768,
                             num_images=1,
