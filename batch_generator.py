@@ -133,43 +133,46 @@ def main():
                             sprite_sheet.save(os.path.join(save_dir, "sprite_sheet_full.png"))
                             
                     else:
-                        # Lógica estándar para otros assets (BATCHING REAL + ASYNC)
+                        # Lógica estándar para otros assets
                         template = PROMPT_TEMPLATES.get(category, PROMPT_TEMPLATES["default"])
                         # Inyectar adjetivo
                         prompt = template.format(item=item, biome=biome, adjective=biome_adj)
                         
-                        # Generar TODAS las variaciones de una vez (Batching)
-                        # SDXL procesará esto mucho más rápido que 1 a 1
-                        print(f"  > Generando {args.count} variaciones en paralelo...")
-                        images, meta = generator.generate(
-                            prompt=prompt,
-                            num_inference_steps=40, 
-                            guidance_scale=6.5,
-                            width=768, # Reducido para estabilidad
-                            height=768, # Reducido para estabilidad
-                            num_images=args.count, # Batch size real
-                            ip_adapter_image=style_image, # Inyectar estilo
-                            ip_adapter_scale=args.style_strength # Fuerza del estilo variable
-                        )
-                        
                         save_dir = os.path.join(args.output, biome, category)
                         ensure_dir(save_dir)
-                        
-                        # Guardar metadatos generales del batch
                         base_filename = item.replace(' ', '_')
-                        batch_meta_path = os.path.join(save_dir, f"{base_filename}_metadata.json")
-                        with open(batch_meta_path, 'w') as f:
-                            json.dump(meta, f, indent=2)
                         
-                        for i, img in enumerate(images):
-                            filename = f"{base_filename}_{i+1}.png"
-                            save_path = os.path.join(save_dir, filename)
+                        # GENERAR DE A 1 para evitar OOM (en lugar de batch)
+                        # Aunque es más lento, es más estable con IP-Adapter
+                        for variation_idx in range(args.count):
+                            print(f"  > Generando variación {variation_idx+1}/{args.count}...")
                             
-                            # ENVIAR A WORKER (No bloquea el loop principal)
-                            executor.submit(process_and_save_image, img, save_path)
+                            images, meta = generator.generate(
+                                prompt=prompt,
+                                num_inference_steps=40, 
+                                guidance_scale=6.5,
+                                width=768,
+                                height=768,
+                                num_images=1, # Solo 1 imagen a la vez
+                                ip_adapter_image=style_image,
+                                ip_adapter_scale=args.style_strength
+                            )
+                            
+                            # Guardar metadatos de esta variación
+                            meta_path = os.path.join(save_dir, f"{base_filename}_{variation_idx+1}_metadata.json")
+                            with open(meta_path, 'w') as f:
+                                json.dump(meta, f, indent=2)
+                            
+                            # Procesar y guardar
+                            filename = f"{base_filename}_{variation_idx+1}.png"
+                            save_path = os.path.join(save_dir, filename)
+                            executor.submit(process_and_save_image, images[0], save_path)
+                            
+                            # Limpiar memoria después de cada imagen
+                            if variation_idx % 5 == 0:  # Cada 5 imágenes
+                                gc.collect()
+                                torch.cuda.empty_cache()
                     
-                    # No sumamos args.count aquí porque el bucle 'current' es solo visual
-                    # pero si queremos mantener la barra de progreso precisa:
                     current += args.count
 
     print("Generación masiva completada. Esperando a que terminen los procesos de fondo...")
