@@ -135,7 +135,7 @@ class ProceduralEngine:
         return BIOME_PALETTES[biome_key].get(palette_type, BIOME_PALETTES["Forest"]["grass"])
 
     def generate_tree(self, biome: str, variation: int = 0) -> Image.Image:
-        """Genera un árbol procedural (Fractal simple + Clusters)"""
+        """Genera un árbol AVANZADO usando L-Systems"""
         random.seed(variation)
         np.random.seed(variation)
         
@@ -145,59 +145,93 @@ class ProceduralEngine:
         wood_colors = self.get_palette(biome, "dirt")
         leaf_colors = self.get_palette(biome, "grass")
         
-        # Tronco
-        trunk_width = max(2, self.tile_size // 10)
-        trunk_height = self.tile_size // 2
-        start_x = self.tile_size // 2
-        start_y = self.tile_size - 4
-        
-        current_x = start_x
-        points = []
-        for y in range(start_y, start_y - trunk_height, -2):
-            points.append((current_x, y))
-            current_x += random.randint(-1, 1)
+        # Configuración L-System según bioma
+        if biome == "Snowy Tundra" or biome == "Mountain":
+            # Pino (Conífera)
+            axiom = "X"
+            rules = {"X": "F[+X][-X]FX", "F": "FF"}
+            angle = 25
+            iterations = 3
+            start_length = self.tile_size / 6
+            leaf_type = "needle"
+        elif biome == "Swamp" or biome == "Mushroom Grove":
+            # Sauce / Árbol retorcido
+            axiom = "F"
+            rules = {"F": "FF-[+F+F]+[+F-F]"}
+            angle = 22
+            iterations = 3
+            start_length = self.tile_size / 8
+            leaf_type = "drooping"
+        else:
+            # Roble (Genérico)
+            axiom = "X"
+            rules = {"X": "F[+X]F[-X]+X", "F": "FF"}
+            angle = 20
+            iterations = 3
+            start_length = self.tile_size / 7
+            leaf_type = "cluster"
             
-        for i in range(len(points) - 1):
-            draw.line([points[i], points[i+1]], fill=wood_colors[0] + (255,), width=trunk_width)
+        # Generar String
+        sentence = axiom
+        for _ in range(iterations):
+            next_sentence = ""
+            for char in sentence:
+                next_sentence += rules.get(char, char)
+            sentence = next_sentence
             
-        # Copa (Clusters)
-        num_clusters = random.randint(6, 12)
-        top_y = start_y - trunk_height
+        # Renderizar (Turtle Graphics simplificado)
+        stack = []
+        x, y = self.tile_size // 2, self.tile_size - 5
+        angle_current = -90 # Apuntando arriba
+        length = start_length
         
-        # Dibujar clusters de atrás hacia adelante
-        clusters = []
-        for _ in range(num_clusters):
-            cx = start_x + random.randint(-self.tile_size//3, self.tile_size//3)
-            cy = top_y + random.randint(-self.tile_size//4, self.tile_size//4)
-            radius = random.randint(self.tile_size//8, self.tile_size//5)
-            color = random.choice(leaf_colors)
-            clusters.append((cx, cy, radius, color))
+        # Almacenar ramas para dibujar troncos primero
+        branches = [] # (x1, y1, x2, y2, width)
+        leaves = [] # (x, y)
+        
+        for char in sentence:
+            if char == "F":
+                rad = np.radians(angle_current)
+                x2 = x + length * np.cos(rad)
+                y2 = y + length * np.sin(rad)
+                
+                # Grosor disminuye con la altura
+                width = max(1, int((y / self.tile_size) * 4))
+                branches.append((x, y, x2, y2, width))
+                
+                x, y = x2, y2
+            elif char == "+":
+                angle_current += angle + random.uniform(-5, 5)
+            elif char == "-":
+                angle_current -= angle + random.uniform(-5, 5)
+            elif char == "[":
+                stack.append((x, y, angle_current, length))
+                length *= 0.75 # Ramas más cortas
+            elif char == "]":
+                x, y, angle_current, length = stack.pop()
+                # Al final de una rama, añadir hojas
+                leaves.append((x, y))
+                
+        # Dibujar Ramas
+        for b in branches:
+            draw.line([b[0], b[1], b[2], b[3]], fill=wood_colors[0]+(255,), width=b[4])
             
-        # Ordenar por Y para dibujar los de atrás primero
-        clusters.sort(key=lambda c: c[1])
-        
-        for cx, cy, radius, color in clusters:
-            for y in range(cy - radius, cy + radius):
-                for x in range(cx - radius, cx + radius):
-                    if 0 <= x < self.tile_size and 0 <= y < self.tile_size:
-                        dist_sq = (x - cx)**2 + (y - cy)**2
-                        if dist_sq <= radius**2:
-                            # Ruido y sombra
-                            if random.random() > 0.15: # Huecos en hojas
-                                shade = 0
-                                if y > cy: shade -= 20
-                                if x < cx: shade += 20
-                                
-                                r, g, b = color
-                                r = max(0, min(255, r + shade))
-                                g = max(0, min(255, g + shade))
-                                b = max(0, min(255, b + shade))
-                                
-                                # Outline simple (si es borde del cluster)
-                                if dist_sq > (radius-1)**2:
-                                     img.putpixel((x, y), (0,0,0, 255)) # Borde negro
-                                else:
-                                     img.putpixel((x, y), (r, g, b, 255))
+        # Dibujar Hojas
+        for lx, ly in leaves:
+            # Cluster de hojas
+            r = random.randint(4, 8)
+            if leaf_type == "needle":
+                # Forma triangular para pinos
+                draw.polygon([
+                    (lx, ly-r*1.5), (lx-r, ly+r), (lx+r, ly+r)
+                ], fill=random.choice(leaf_colors)+(255,))
+            else:
+                # Círculo irregular
+                for _ in range(5):
+                    ox = lx + random.randint(-r, r)
+                    oy = ly + random.randint(-r, r)
+                    draw.ellipse([ox-2, oy-2, ox+2, oy+2], fill=random.choice(leaf_colors)+(255,))
+                    
         return img
 
     def generate_rock(self, biome: str, variation: int = 0) -> Image.Image:
@@ -583,13 +617,30 @@ class ProceduralEngine:
             draw.ellipse([x-15, ly-20, x+15, ly+10], outline=(255,255,0,100), width=1)
             
         elif "crate" in item_lower:
-            # Caja de madera (Cubo con X)
+            # Caja de madera DETALLADA (Tablas individuales + Clavos)
             s = 24
             x, y = cx - s//2, cy - s//2
-            draw.rectangle([x, y, x+s, y+s], fill=wood_light+(255,), outline=(0,0,0,255))
-            draw.rectangle([x, y, x+s, y+s], outline=(0,0,0,255), width=2) # Borde grueso
-            draw.line([(x, y), (x+s, y+s)], fill=(0,0,0,100), width=2)
-            draw.line([(x+s, y), (x, y+s)], fill=(0,0,0,100), width=2)
+            
+            # Fondo oscuro (interior entre tablas)
+            draw.rectangle([x, y, x+s, y+s], fill=(30, 20, 10, 255))
+            
+            # Marco exterior
+            draw.rectangle([x, y, x+s, y+4], fill=wood_light+(255,)) # Top
+            draw.rectangle([x, y+s-4, x+s, y+s], fill=wood_light+(255,)) # Bottom
+            draw.rectangle([x, y, x+4, y+s], fill=wood_light+(255,)) # Left
+            draw.rectangle([x+s-4, y, x+s, y+s], fill=wood_light+(255,)) # Right
+            
+            # Tablas diagonales (Cross)
+            draw.line([(x+4, y+4), (x+s-4, y+s-4)], fill=wood_dark+(255,), width=3)
+            draw.line([(x+s-4, y+4), (x+4, y+s-4)], fill=wood_dark+(255,), width=3)
+            
+            # Clavos (Puntos metálicos)
+            nails = [(x+2, y+2), (x+s-2, y+2), (x+2, y+s-2), (x+s-2, y+s-2)]
+            for nx, ny in nails:
+                draw.point((nx, ny), fill=(50, 50, 50, 255))
+                
+            # Sombreado interior
+            draw.rectangle([x, y, x+s, y+s], outline=(0,0,0,255))
             
         elif "window" in item_lower:
             # Marco de ventana
@@ -659,13 +710,59 @@ class ProceduralEngine:
         cx, cy = self.tile_size // 2, self.tile_size // 2
         
         if "sword" in item.lower():
-            # Espada
-            # Mango
-            draw.line([(cx, cy+10), (cx, cy+25)], fill=(139,69,19,255), width=3)
-            # Guarda
-            draw.line([(cx-6, cy+10), (cx+6, cy+10)], fill=(192,192,192,255), width=3)
-            # Hoja
-            draw.polygon([(cx-2, cy+10), (cx+2, cy+10), (cx, cy-20)], fill=(220,220,220,255), outline=(100,100,100,255))
+            # Espada DETALLADA (Pixel Perfect)
+            # Hoja (Metal con brillo)
+            blade_color = (200, 200, 200, 255)
+            blade_shadow = (150, 150, 150, 255)
+            blade_highlight = (255, 255, 255, 255)
+            
+            # Hoja principal
+            draw.polygon([(cx-2, cy+10), (cx+2, cy+10), (cx, cy-22)], fill=blade_color)
+            # Filo sombra (lado derecho)
+            draw.line([(cx, cy-22), (cx+2, cy+10)], fill=blade_shadow, width=1)
+            # Brillo central
+            draw.line([(cx, cy-20), (cx, cy+8)], fill=blade_highlight, width=1)
+            
+            # Guarda (Oro/Bronce)
+            guard_color = (218, 165, 32, 255)
+            draw.rectangle([cx-8, cy+10, cx+8, cy+13], fill=guard_color, outline=(0,0,0,255))
+            # Gemas en la guarda
+            draw.point((cx, cy+11), fill=(255, 0, 0, 255))
+            
+            # Mango (Cuero)
+            draw.rectangle([cx-1, cy+13, cx+1, cy+22], fill=(139, 69, 19, 255))
+            
+            # Pomo (Redondo)
+            draw.ellipse([cx-3, cy+22, cx+3, cy+26], fill=guard_color, outline=(0,0,0,255))
+            
+        elif "shield" in item.lower():
+            # Escudo DETALLADO (Heráldica)
+            # Base (Madera o Metal)
+            base_color = (70, 130, 180, 255) # Azul acero
+            trim_color = (192, 192, 192, 255) # Plata
+            
+            # Forma de escudo (Heater Shield)
+            points = [
+                (cx-10, cy-10), (cx+10, cy-10), # Top
+                (cx+10, cy), (cx, cy+15), (cx-10, cy) # Bottom curve
+            ]
+            draw.polygon(points, fill=base_color, outline=(0,0,0,255))
+            
+            # Borde metálico
+            draw.line([(cx-10, cy-10), (cx+10, cy-10)], fill=trim_color, width=2)
+            draw.line([(cx-10, cy-10), (cx-10, cy)], fill=trim_color, width=2)
+            draw.line([(cx+10, cy-10), (cx+10, cy)], fill=trim_color, width=2)
+            draw.line([(cx-10, cy), (cx, cy+15)], fill=trim_color, width=2)
+            draw.line([(cx+10, cy), (cx, cy+15)], fill=trim_color, width=2)
+            
+            # Emblema (Cruz o Diseño)
+            if variation % 2 == 0:
+                # Cruz
+                draw.rectangle([cx-2, cy-8, cx+2, cy+10], fill=trim_color)
+                draw.rectangle([cx-8, cy-2, cx+8, cy+2], fill=trim_color)
+            else:
+                # Boss central (Umbo)
+                draw.ellipse([cx-4, cy-4, cx+4, cy+4], fill=trim_color, outline=(0,0,0,255))
             
         elif "axe" in item.lower():
             # Hacha
@@ -740,45 +837,63 @@ class ProceduralEngine:
         return img
 
     def generate_character(self, biome: str, item: str, variation: int = 0) -> Image.Image:
-        """Genera personajes usando Paper Doll (Capas)"""
+        """Genera personajes DINÁMICOS (Paper Doll Extendido)"""
         random.seed(variation)
         img = Image.new("RGBA", (self.tile_size, self.tile_size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
         cx, cy = self.tile_size // 2, self.tile_size // 2
         
-        # Colores de piel
+        # Colores
         skins = [(255, 224, 189), (255, 205, 148), (234, 192, 134), (255, 173, 96), (141, 85, 36)]
         skin_color = skins[variation % len(skins)]
-        
-        # Colores de ropa (basados en bioma)
         clothes_color = self.get_palette(biome, "grass")[0]
         pants_color = self.get_palette(biome, "dirt")[0]
+        
+        # Postura (Idle vs Walk)
+        is_walking = variation % 2 == 0
+        leg_offset = 2 if is_walking else 0
         
         # 1. Cuerpo Base
         # Cabeza
         draw.rectangle([cx-3, cy-10, cx+3, cy-4], fill=skin_color+(255,))
         # Torso
         draw.rectangle([cx-4, cy-4, cx+4, cy+4], fill=clothes_color+(255,))
+        
         # Brazos
-        draw.rectangle([cx-6, cy-4, cx-4, cy+2], fill=skin_color+(255,))
-        draw.rectangle([cx+4, cy-4, cx+6, cy+2], fill=skin_color+(255,))
+        if is_walking:
+            draw.line([(cx-4, cy-3), (cx-7, cy+2)], fill=skin_color+(255,), width=2)
+            draw.line([(cx+4, cy-3), (cx+7, cy+2)], fill=skin_color+(255,), width=2)
+        else:
+            draw.rectangle([cx-6, cy-4, cx-4, cy+2], fill=skin_color+(255,))
+            draw.rectangle([cx+4, cy-4, cx+6, cy+2], fill=skin_color+(255,))
+            
         # Piernas
-        draw.rectangle([cx-3, cy+4, cx-1, cy+12], fill=pants_color+(255,))
-        draw.rectangle([cx+1, cy+4, cx+3, cy+12], fill=pants_color+(255,))
+        draw.rectangle([cx-3, cy+4, cx-1, cy+12-leg_offset], fill=pants_color+(255,))
+        draw.rectangle([cx+1, cy+4, cx+3, cy+12+leg_offset], fill=pants_color+(255,))
         
         # 2. Detalles (Pelo, Ojos)
         hair_colors = [(0,0,0), (139,69,19), (255,215,0), (169,169,169)]
         hair_color = hair_colors[variation % len(hair_colors)]
         
         # Pelo
-        draw.rectangle([cx-4, cy-11, cx+4, cy-8], fill=hair_color+(255,)) # Top
-        draw.rectangle([cx-4, cy-11, cx-2, cy-6], fill=hair_color+(255,)) # Side L
-        draw.rectangle([cx+2, cy-11, cx+4, cy-6], fill=hair_color+(255,)) # Side R
+        draw.rectangle([cx-4, cy-11, cx+4, cy-8], fill=hair_color+(255,))
+        draw.rectangle([cx-4, cy-11, cx-2, cy-6], fill=hair_color+(255,))
+        draw.rectangle([cx+2, cy-11, cx+4, cy-6], fill=hair_color+(255,))
         
         # Ojos
         draw.point((cx-1, cy-7), fill=(0,0,0,255))
         draw.point((cx+1, cy-7), fill=(0,0,0,255))
+        
+        # 3. Accesorios (Sombrero/Capa) - 50% prob
+        if random.random() > 0.5:
+            if random.random() > 0.5:
+                # Sombrero
+                draw.rectangle([cx-5, cy-12, cx+5, cy-10], fill=pants_color+(255,)) # Ala
+                draw.rectangle([cx-3, cy-14, cx+3, cy-10], fill=pants_color+(255,)) # Copa
+            else:
+                # Capa
+                draw.polygon([(cx-4, cy-4), (cx+4, cy-4), (cx+6, cy+10), (cx-6, cy+10)], fill=(100,0,0,255))
         
         return img
 
@@ -969,11 +1084,33 @@ class ProceduralEngine:
             path_mask[int(self.tile_size * 0.25):int(self.tile_size * 0.75), :int(self.tile_size * 0.5)] = True
         
         # Aplicar textura solo en camino
+        # Capa 2: Detalle (Ruido blanco)
+        detail_noise = np.random.rand(self.tile_size, self.tile_size)
+        
         for y in range(self.tile_size):
             for x in range(self.tile_size):
-                if path_mask[y, x]:
-                    color_idx = int(noise[y, x] * (len(path_palette) - 1))
-                    pixels[x, y] = path_palette[color_idx] + (255,)
+                if path_mask[y, x]: # Solo aplicar textura si es parte del camino
+                    n = noise[y, x]
+                    d = detail_noise[y, x] * 0.1 # 10% influencia del ruido de detalle
+                    
+                    val = n + d
+                    
+                    # Mapear a paleta
+                    idx = int(val * (len(path_palette) - 1))
+                    idx = max(0, min(len(path_palette) - 1, idx))
+                    
+                    val_color = path_palette[idx]
+                    
+                    # Decoración dispersa (Piedritas/Flores)
+                    if random.random() > 0.98:
+                        if random.random() > 0.5:
+                            # Piedrita
+                            pixels[x, y] = (100, 100, 100, 255)
+                        else:
+                            # Flor/Hierba (usando el color base del camino para la variación)
+                            pixels[x, y] = (val_color[0]+20, val_color[1]+20, val_color[2], 255)
+                    else:
+                        pixels[x, y] = val_color + (255,)
         
         return img
     
