@@ -118,7 +118,7 @@ EOF
 
 # 2. Ejecutar
 echo "🚀 Ejecutando generador corregido..."
-python run_procedural_batch.py --count 3 --size 64 # Reducido a 3 para velocidad en fix
+python run_procedural_batch.py --count 10 --size 64 # 10 variantes por asset
 
 echo ""
 echo "✅ Producción completada en 'public/assets/'"

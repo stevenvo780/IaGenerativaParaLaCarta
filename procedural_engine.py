@@ -595,26 +595,27 @@ class ProceduralEngine:
             draw.rectangle([x+w, y, x+w+2, y+h_seat], fill=wood_dark+(255,), outline=(0,0,0,255))
 
         elif "lamp" in item_lower or "lantern" in item_lower:
-            # Lámpara de calle
+            # Lámpara de calle (CORREGIDA - Centrado vertical)
             h = 40
-            x, y = cx, cy + h//2
+            # Centrar verticalmente: y_base estará en cy + altura_mitad
+            y_base = cy + 10  # Base abajo del centro
             
             # Poste
-            draw.rectangle([x-2, y-h, x+2, y], fill=(50,50,50,255), outline=(0,0,0,255))
-            # Base
-            draw.polygon([(x-6, y), (x+6, y), (x+2, y-4), (x-2, y-4)], fill=(40,40,40,255))
+            draw.rectangle([cx-2, y_base-h, cx+2, y_base], fill=(50,50,50,255), outline=(0,0,0,255))
+            # Base del poste
+            draw.polygon([(cx-6, y_base), (cx+6, y_base), (cx+2, y_base-4), (cx-2, y_base-4)], fill=(40,40,40,255))
             
-            # Linterna
-            ly = y - h
-            draw.rectangle([x-6, ly-12, x+6, ly], fill=(255,255,200,200), outline=(0,0,0,255)) # Cristal
-            draw.line([(x-6, ly-12), (x+6, ly)], fill=(0,0,0,100)) # Cruz
-            draw.line([(x+6, ly-12), (x-6, ly)], fill=(0,0,0,100))
+            # Linterna (en la parte superior del poste)
+            ly = y_base - h
+            draw.rectangle([cx-6, ly-12, cx+6, ly], fill=(255,255,200,200), outline=(0,0,0,255)) # Cristal
+            draw.line([(cx-6, ly-12), (cx+6, ly)], fill=(0,0,0,100)) # Cruz
+            draw.line([(cx+6, ly-12), (cx-6, ly)], fill=(0,0,0,100))
             
             # Tapa
-            draw.polygon([(x-8, ly-12), (x+8, ly-12), (x, ly-18)], fill=(50,50,50,255))
+            draw.polygon([(cx-8, ly-12), (cx+8, ly-12), (cx, ly-18)], fill=(50,50,50,255))
             
-            # Glow (Halo)
-            draw.ellipse([x-15, ly-20, x+15, ly+10], outline=(255,255,0,100), width=1)
+            # Glow (Halo) - más pequeño para que quepa
+            draw.ellipse([cx-12, ly-16, cx+12, ly+8], outline=(255,255,0,100), width=1)
             
         elif "crate" in item_lower:
             # Caja de madera DETALLADA (Tablas individuales + Clavos)
