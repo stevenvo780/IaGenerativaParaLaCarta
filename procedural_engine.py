@@ -5,6 +5,7 @@ Generador Procedural MEJORADO de Tiles para Pixel Art
 ✅ 15 variantes de caminos
 ✅ Máxima paralelización CPU
 """
+import math
 import numpy as np
 from PIL import Image, ImageDraw
 import random
@@ -595,27 +596,35 @@ class ProceduralEngine:
             draw.rectangle([x+w, y, x+w+2, y+h_seat], fill=wood_dark+(255,), outline=(0,0,0,255))
 
         elif "lamp" in item_lower or "lantern" in item_lower:
-            # Lámpara de calle (CORREGIDA - Centrado vertical)
-            h = 40
-            # Centrar verticalmente: y_base estará en cy + altura_mitad
-            y_base = cy + 10  # Base abajo del centro
+            # Lámpara de calle (CORREGIDA V2 - Altura reducida)
+            # Altura total: poste(28) + linterna(10) + tapa(6) = 44px
+            poste_h = 28
+            linterna_h = 10
+            tapa_h = 6
+            total_h = poste_h + linterna_h + tapa_h  # 44px
+            
+            # Centrar: top en cy - total_h//2, bottom en cy + total_h//2
+            y_top = cy - total_h//2
+            y_bottom = y_top + poste_h
             
             # Poste
-            draw.rectangle([cx-2, y_base-h, cx+2, y_base], fill=(50,50,50,255), outline=(0,0,0,255))
+            draw.rectangle([cx-2, y_top, cx+2, y_bottom], fill=(50,50,50,255), outline=(0,0,0,255))
             # Base del poste
-            draw.polygon([(cx-6, y_base), (cx+6, y_base), (cx+2, y_base-4), (cx-2, y_base-4)], fill=(40,40,40,255))
+            draw.polygon([(cx-5, y_bottom), (cx+5, y_bottom), (cx+3, y_bottom-3), (cx-3, y_bottom-3)], fill=(40,40,40,255))
             
             # Linterna (en la parte superior del poste)
-            ly = y_base - h
-            draw.rectangle([cx-6, ly-12, cx+6, ly], fill=(255,255,200,200), outline=(0,0,0,255)) # Cristal
-            draw.line([(cx-6, ly-12), (cx+6, ly)], fill=(0,0,0,100)) # Cruz
-            draw.line([(cx+6, ly-12), (cx-6, ly)], fill=(0,0,0,100))
+            ly_bottom = y_top
+            ly_top = ly_bottom - linterna_h
+            draw.rectangle([cx-5, ly_top, cx+5, ly_bottom], fill=(255,255,200,200), outline=(0,0,0,255)) # Cristal
+            # Cruz interna
+            draw.line([(cx, ly_top), (cx, ly_bottom)], fill=(0,0,0,80))
+            draw.line([(cx-5, ly_top+linterna_h//2), (cx+5, ly_top+linterna_h//2)], fill=(0,0,0,80))
             
             # Tapa
-            draw.polygon([(cx-8, ly-12), (cx+8, ly-12), (cx, ly-18)], fill=(50,50,50,255))
+            draw.polygon([(cx-6, ly_top), (cx+6, ly_top), (cx, ly_top-tapa_h)], fill=(50,50,50,255), outline=(0,0,0,255))
             
-            # Glow (Halo) - más pequeño para que quepa
-            draw.ellipse([cx-12, ly-16, cx+12, ly+8], outline=(255,255,0,100), width=1)
+            # Glow (Halo) - pequeño
+            draw.ellipse([cx-8, ly_top-2, cx+8, ly_bottom+2], outline=(255,255,0,100), width=1)
             
         elif "crate" in item_lower:
             # Caja de madera DETALLADA (Tablas individuales + Clavos)
@@ -709,98 +718,154 @@ class ProceduralEngine:
         draw = ImageDraw.Draw(img)
         
         cx, cy = self.tile_size // 2, self.tile_size // 2
+        item_lower = item.lower()
         
-        if "sword" in item.lower():
-            # Espada DETALLADA (Pixel Perfect)
-            # Hoja (Metal con brillo)
+        if "sword" in item_lower:
             blade_color = (200, 200, 200, 255)
             blade_shadow = (150, 150, 150, 255)
             blade_highlight = (255, 255, 255, 255)
-            
-            # Hoja principal
             draw.polygon([(cx-2, cy+10), (cx+2, cy+10), (cx, cy-22)], fill=blade_color)
-            # Filo sombra (lado derecho)
             draw.line([(cx, cy-22), (cx+2, cy+10)], fill=blade_shadow, width=1)
-            # Brillo central
             draw.line([(cx, cy-20), (cx, cy+8)], fill=blade_highlight, width=1)
-            
-            # Guarda (Oro/Bronce)
             guard_color = (218, 165, 32, 255)
             draw.rectangle([cx-8, cy+10, cx+8, cy+13], fill=guard_color, outline=(0,0,0,255))
-            # Gemas en la guarda
             draw.point((cx, cy+11), fill=(255, 0, 0, 255))
-            
-            # Mango (Cuero)
             draw.rectangle([cx-1, cy+13, cx+1, cy+22], fill=(139, 69, 19, 255))
-            
-            # Pomo (Redondo)
             draw.ellipse([cx-3, cy+22, cx+3, cy+26], fill=guard_color, outline=(0,0,0,255))
             
-        elif "shield" in item.lower():
-            # Escudo DETALLADO (Heráldica)
-            # Base (Madera o Metal)
-            base_color = (70, 130, 180, 255) # Azul acero
-            trim_color = (192, 192, 192, 255) # Plata
-            
-            # Forma de escudo (Heater Shield)
+        elif "shield" in item_lower:
+            base_color = (70, 130, 180, 255)
+            trim_color = (192, 192, 192, 255)
             points = [
-                (cx-10, cy-10), (cx+10, cy-10), # Top
-                (cx+10, cy), (cx, cy+15), (cx-10, cy) # Bottom curve
+                (cx-10, cy-10), (cx+10, cy-10),
+                (cx+10, cy), (cx, cy+15), (cx-10, cy)
             ]
             draw.polygon(points, fill=base_color, outline=(0,0,0,255))
-            
-            # Borde metálico
             draw.line([(cx-10, cy-10), (cx+10, cy-10)], fill=trim_color, width=2)
             draw.line([(cx-10, cy-10), (cx-10, cy)], fill=trim_color, width=2)
             draw.line([(cx+10, cy-10), (cx+10, cy)], fill=trim_color, width=2)
             draw.line([(cx-10, cy), (cx, cy+15)], fill=trim_color, width=2)
             draw.line([(cx+10, cy), (cx, cy+15)], fill=trim_color, width=2)
-            
-            # Emblema (Cruz o Diseño)
             if variation % 2 == 0:
-                # Cruz
                 draw.rectangle([cx-2, cy-8, cx+2, cy+10], fill=trim_color)
                 draw.rectangle([cx-8, cy-2, cx+8, cy+2], fill=trim_color)
             else:
-                # Boss central (Umbo)
                 draw.ellipse([cx-4, cy-4, cx+4, cy+4], fill=trim_color, outline=(0,0,0,255))
             
-        elif "axe" in item.lower():
-            # Hacha
-            # Mango
+        elif "potion" in item_lower or "flask" in item_lower:
+            draw.ellipse([cx-6, cy, cx+6, cy+12], fill=(255, 0, 255, 200), outline=(0,0,0,255))
+            draw.rectangle([cx-2, cy-6, cx+2, cy], fill=(200,200,200,100), outline=(0,0,0,255))
+            draw.rectangle([cx-3, cy-8, cx+3, cy-6], fill=(139,69,19,255))
+            draw.ellipse([cx-3, cy+3, cx-1, cy+5], fill=(255,255,255,200))
+            
+        elif "book" in item_lower:
+            draw.rectangle([cx-8, cy-10, cx+8, cy+10], fill=(139, 0, 0, 255), outline=(0,0,0,255))
+            draw.rectangle([cx+6, cy-8, cx+8, cy+8], fill=(255,255,200,255))
+            draw.rectangle([cx-4, cy-6, cx+2, cy-2], fill=(255,215,0,255))
+            
+        elif "scroll" in item_lower:
+            draw.rectangle([cx-6, cy-10, cx+6, cy+10], fill=(245,222,179,255), outline=(0,0,0,255))
+            draw.ellipse([cx-8, cy-12, cx+8, cy-8], fill=(210,180,140,255), outline=(0,0,0,255))
+            draw.ellipse([cx-8, cy+8, cx+8, cy+12], fill=(210,180,140,255), outline=(0,0,0,255))
+            
+        elif "ingot" in item_lower:
+            color = (255, 215, 0, 255) if "gold" in item_lower else (192, 192, 192, 255)
+            draw.polygon([(cx-8, cy+4), (cx+8, cy+4), (cx+6, cy-4), (cx-6, cy-4)], fill=color, outline=(0,0,0,255))
+            draw.polygon([(cx-6, cy-4), (cx+6, cy-4), (cx+4, cy-8), (cx-4, cy-8)], fill=(255, 255, 255, 100))
+            
+        elif "axe" in item_lower:
             draw.line([(cx, cy-10), (cx, cy+20)], fill=(139,69,19,255), width=3)
-            # Cabeza
             draw.pieslice([cx-10, cy-15, cx+10, cy+5], 180, 360, fill=(169,169,169,255), outline=(0,0,0,255))
             
-        elif "potion" in item.lower():
-            # Poción
-            # Botella
-            w, h = 12, 16
-            draw.rectangle([cx-w//2, cy-h//2, cx+w//2, cy+h//2], outline=(200,200,200,255))
-            # Cuello
-            draw.rectangle([cx-3, cy-h//2-4, cx+3, cy-h//2], outline=(200,200,200,255))
-            # Líquido
-            color = (255, 0, 0, 200) if "health" in item else (0, 0, 255, 200)
-            draw.rectangle([cx-w//2+1, cy, cx+w//2-1, cy+h//2-1], fill=color)
+        elif "bread" in item_lower:
+            draw.ellipse([cx-12, cy-6, cx+12, cy+6], fill=(210,180,140,255), outline=(139,69,19,255))
             
-        elif "apple" in item.lower():
-            # Manzana
+        elif "pie" in item_lower:
+            draw.ellipse([cx-12, cy-6, cx+12, cy+6], fill=(222, 184, 135, 255), outline=(139, 69, 19, 255))
+            for angle in range(0, 180, 30):
+                draw.line([(cx, cy), (cx + int(12 * math.cos(math.radians(angle))), cy + int(6 * math.sin(math.radians(angle))))], fill=(160, 82, 45, 200))
+            
+        elif "apple" in item_lower:
             draw.ellipse([cx-8, cy-8, cx+8, cy+8], fill=(255,0,0,255), outline=(100,0,0,255))
             draw.line([(cx, cy-8), (cx, cy-12)], fill=(0,100,0,255), width=2)
             
-        elif "bread" in item.lower():
-            # Pan
-            draw.ellipse([cx-12, cy-6, cx+12, cy+6], fill=(210,180,140,255), outline=(139,69,19,255))
+        elif "fish" in item_lower:
+            draw.ellipse([cx-10, cy-4, cx+6, cy+4], fill=(135,206,235,255), outline=(0,0,0,255))
+            draw.polygon([(cx+6, cy-4), (cx+12, cy), (cx+6, cy+4)], fill=(100, 149, 237, 255), outline=(0,0,0,255))
+            draw.point((cx-6, cy), fill=(0,0,0,255))
             
-        elif "ore" in item.lower() or "stone" in item.lower():
-            # Mineral
+        elif "salad" in item_lower:
+            draw.arc([cx-12, cy-6, cx+12, cy+10], 0, 180, fill=(0,0,0,255), width=2)
+            draw.rectangle([cx-12, cy+2, cx+12, cy+8], fill=(200,200,255,255))
+            draw.ellipse([cx-10, cy-2, cx+10, cy+6], fill=(60,179,113,255))
+            draw.ellipse([cx-8, cy, cx-4, cy+4], fill=(255,69,0,255))
+            draw.ellipse([cx+4, cy-1, cx+8, cy+3], fill=(255,215,0,255))
+            
+        elif "burger" in item_lower:
+            draw.ellipse([cx-12, cy-4, cx+12, cy+4], fill=(205,133,63,255), outline=(110,54,9,255))
+            draw.rectangle([cx-12, cy-2, cx+12, cy+2], fill=(139,69,19,255))
+            draw.rectangle([cx-10, cy-3, cx+10, cy-1], fill=(34,139,34,255))
+            draw.rectangle([cx-8, cy-1, cx+8, cy+1], fill=(255,0,0,255))
+            
+        elif "pizza" in item_lower:
+            draw.polygon([(cx-10, cy+6), (cx+10, cy+6), (cx, cy-10)], fill=(255,228,181,255), outline=(139,69,19,255))
+            for dx in [-4, 0, 4]:
+                draw.ellipse([cx+dx-2, cy+2, cx+dx+2, cy+6], fill=(178,34,34,255))
+            
+        elif "icecream" in item_lower or "ice cream" in item_lower:
+            draw.polygon([(cx-4, cy+8), (cx+4, cy+8), (cx, cy+16)], fill=(205,133,63,255), outline=(110,54,9,255))
+            draw.ellipse([cx-8, cy-4, cx+8, cy+6], fill=(255,182,193,255), outline=(255,105,180,255))
+            for dx, dy, sprinkle_color in [(-4, -1, (255,255,0,200)), (0, 1, (0,191,255,200)), (4, 0, (255,105,180,200))]:
+                draw.line([(cx+dx-1, cy+dy), (cx+dx+1, cy+dy)], fill=sprinkle_color, width=1)
+            
+        elif "sandwich" in item_lower:
+            draw.rectangle([cx-12, cy-4, cx+12, cy+4], fill=(222,184,135,255), outline=(139,69,19,255))
+            draw.rectangle([cx-10, cy-2, cx+10, cy], fill=(50,205,50,255))
+            draw.rectangle([cx-10, cy, cx+10, cy+2], fill=(255,0,0,255))
+            
+        elif "hotdog" in item_lower or "hot dog" in item_lower:
+            draw.ellipse([cx-14, cy-4, cx+14, cy+4], fill=(244,164,96,255), outline=(139,69,19,255))
+            draw.rectangle([cx-10, cy-2, cx+10, cy+2], fill=(178,34,34,255))
+            draw.line([(cx-10, cy), (cx+10, cy)], fill=(255,215,0,255), width=1)
+            
+        elif "fries" in item_lower:
+            draw.rectangle([cx-10, cy, cx+10, cy+12], fill=(220,20,60,255), outline=(0,0,0,255))
+            for dx in [-8, -4, 0, 4, 8]:
+                draw.rectangle([cx+dx-1, cy-8, cx+dx+1, cy], fill=(255,215,0,255))
+            
+        elif "cake" in item_lower:
+            draw.rectangle([cx-12, cy, cx+12, cy+10], fill=(255,228,225,255), outline=(139,0,139,255))
+            draw.rectangle([cx-12, cy-4, cx+12, cy], fill=(255,182,193,255))
+            draw.line([(cx, cy-4), (cx, cy-12)], fill=(255,255,0,255), width=2)
+            draw.ellipse([cx-1, cy-14, cx+1, cy-12], fill=(255,69,0,255))
+            
+        elif "donut" in item_lower:
+            draw.ellipse([cx-10, cy-4, cx+10, cy+6], fill=(210,105,30,255), outline=(139,69,19,255))
+            draw.ellipse([cx-4, cy, cx+4, cy+4], fill=(0,0,0,0))
+            for dx in [-6, -2, 2, 6]:
+                draw.point((cx+dx, cy+1), fill=(255,255,0,255))
+            
+        elif "popcorn" in item_lower:
+            draw.polygon([(cx-10, cy+10), (cx+10, cy+10), (cx+8, cy-2), (cx-8, cy-2)], fill=(255,0,0,255), outline=(0,0,0,255))
+            draw.line([(cx-6, cy+10), (cx-4, cy-2)], fill=(255,255,255,255), width=1)
+            draw.line([(cx+6, cy+10), (cx+4, cy-2)], fill=(255,255,255,255), width=1)
+            draw.ellipse([cx-10, cy-6, cx+10, cy+2], fill=(255,250,205,255))
+            
+        elif "cookie" in item_lower:
+            draw.ellipse([cx-10, cy-4, cx+10, cy+6], fill=(160,82,45,255), outline=(110,54,9,255))
+            for dx, dy in [(-4,-1), (0,0), (4,1), (-2,2), (3,-2)]:
+                draw.ellipse([cx+dx-1, cy+dy-1, cx+dx+1, cy+dy+1], fill=(60,30,10,255))
+            
+        elif "ore" in item_lower or "stone" in item_lower:
             color = (128,128,128,255)
-            if "gold" in item: color = (255,215,0,255)
-            elif "iron" in item: color = (192,192,192,255)
+            if "gold" in item_lower:
+                color = (255,215,0,255)
+            elif "iron" in item_lower:
+                color = (192,192,192,255)
+            draw.polygon([(cx-5, cy), (cx, cy-5), (cx+5, cy), (cx, cy+5)], fill=color, outline=(0,0,0,255))
             
-            draw.polygon([
-                (cx-5, cy), (cx, cy-5), (cx+5, cy), (cx, cy+5)
-            ], fill=color, outline=(0,0,0,255))
+        else:
+            draw.rectangle([cx-6, cy-6, cx+6, cy+6], fill=(180, 180, 180, 255), outline=(0,0,0,255))
             
         return img
 

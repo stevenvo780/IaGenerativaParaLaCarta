@@ -23,11 +23,30 @@ BIOME_MAP = {
     "tundra": "Snowy Tundra"
 }
 
-# Lista de Props a generar por bioma
+# Lista de Props a generar por bioma (EXPANDIDA)
 PROPS_LIST = [
-    "crate", "barrel", "table", "chair", "bench", 
-    "lantern", "street lamp", "chest", "window frame",
-    "market umbrella", "clothesline", "glass bottle"
+    # Muebles básicos
+    "crate", "barrel", "table", "chair", "bench", "chest",
+    # Iluminación
+    "lantern", "street lamp", "torch", "candelabra",
+    # Decoración
+    "window frame", "market umbrella", "clothesline", "glass bottle",
+    "flower pot", "vase", "painting", "rug", "curtain", "skull",
+    # Herramientas/Trabajo
+    "anvil", "forge", "loom", "spinning wheel", "workbench",
+    # Almacenamiento
+    "shelf", "bookshelf", "wardrobe", "cabinet",
+    # Cocina/Comida
+    "oven", "cauldron", "cooking pot", "food barrel",
+    # Exterior
+    "well", "fountain", "statue", "signpost", "flag"
+]
+
+# Lista de Animales (EXPANDIDA)
+ANIMALS_LIST = [
+    "pig", "cow", "sheep", "chicken", "horse",
+    "rabbit", "deer", "wolf", "bear", "fox",
+    "duck", "goose", "cat", "dog", "goat"
 ]
 
 def main():
@@ -75,9 +94,16 @@ def main():
         tasks.append({"path": f"decals/{user_biome}", "cat": "Effects_Simple", "item": "dirt_patch", "biome": engine_biome})
 
     # --- 4. ENTITIES ---
-    tasks.append({"path": "entities/animals", "cat": "Animals", "item": "pig", "biome": "Grassland"})
-    tasks.append({"path": "entities/animals", "cat": "Animals", "item": "cow", "biome": "Grassland"})
-    tasks.append({"path": "entities/animals", "cat": "Animals", "item": "chicken", "biome": "Forest"})
+    # Animals (Variedad expandida)
+    for animal_name in ANIMALS_LIST:
+        tasks.append({
+            "path": "entities/animals", 
+            "cat": "Animals", 
+            "item": animal_name, 
+            "biome": "Grassland"  # Puedes variar el bioma si quieres
+        })
+    
+    # Characters
     tasks.append({"path": "entities/characters", "cat": "Characters", "item": "villager", "biome": "Forest"})
     
     # --- 5. ITEMS & CONSUMABLES ---
